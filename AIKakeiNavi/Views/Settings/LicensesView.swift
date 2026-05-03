@@ -62,19 +62,21 @@ private let libraries: [LicenseEntry] = [
 struct LicensesView: View {
     var body: some View {
         List(libraries) { lib in
-            Link(destination: URL(string: lib.url)!) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(lib.name)
-                        .foregroundStyle(.primary)
-                        .fontWeight(.medium)
-                    Text(lib.licenseType)
-                        .font(.caption)
-                        .foregroundStyle(.blue)
-                    Text(lib.copyright)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+            if let url = URL(string: lib.url) {
+                Link(destination: url) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(lib.name)
+                            .foregroundStyle(.primary)
+                            .fontWeight(.medium)
+                        Text(lib.licenseType)
+                            .font(.caption)
+                            .foregroundStyle(.blue)
+                        Text(lib.copyright)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 2)
                 }
-                .padding(.vertical, 2)
             }
         }
         .navigationTitle("オープンソースライセンス")

@@ -30,7 +30,7 @@
 ## セットアップ
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/st0731/AI-Kakei-Navi.git
 cd AIKakeiNavi
 open AIKakeiNavi.xcodeproj
 ```
