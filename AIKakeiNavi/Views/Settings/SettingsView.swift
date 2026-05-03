@@ -72,14 +72,10 @@ struct SettingsView: View {
 
                 // MARK: - ライセンス
                 Section("オープンソースライセンス") {
-                    Link(destination: URL(string: "https://huggingface.co/Qwen/Qwen3-1.7B")!) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Qwen3-1.7B")
-                                .foregroundStyle(.primary)
-                            Text("Apache License 2.0  © Alibaba Cloud")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
+                    NavigationLink {
+                        LicensesView()
+                    } label: {
+                        Label("使用ライブラリ一覧", systemImage: "doc.plaintext")
                     }
                 }
 
