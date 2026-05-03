@@ -70,6 +70,19 @@ struct SettingsView: View {
                     Text("節約AIの設定")
                 }
 
+                // MARK: - ライセンス
+                Section("オープンソースライセンス") {
+                    Link(destination: URL(string: "https://huggingface.co/Qwen/Qwen3-1.7B")!) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Qwen3-1.7B")
+                                .foregroundStyle(.primary)
+                            Text("Apache License 2.0  © Alibaba Cloud")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
                 // MARK: - 情報
                 Section("情報") {
                     Link(destination: URL(string: "https://st0731.github.io/miruraku-kakeibo/privacy")!) {

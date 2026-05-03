@@ -60,6 +60,16 @@ AIKakeiNavi/
 └── Components/     # 共通UIコンポーネント
 ```
 
+## オープンソースライセンス
+
+このアプリは以下のオープンソースソフトウェアを使用しています。
+
+| ライブラリ / モデル | ライセンス |
+|---|---|
+| [Qwen3-1.7B](https://huggingface.co/Qwen/Qwen3-1.7B) | Apache 2.0 |
+| [mlx-swift](https://github.com/ml-explore/mlx-swift) | MIT |
+| [mlx-swift-examples](https://github.com/ml-explore/mlx-swift-examples) | MIT |
+
 ## ライセンス
 
 MIT
