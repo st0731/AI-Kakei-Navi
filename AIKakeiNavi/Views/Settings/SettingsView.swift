@@ -81,20 +81,26 @@ struct SettingsView: View {
 
                 // MARK: - 情報
                 Section("情報") {
-                    Link(destination: URL(string: "https://st0731.github.io/AI-Kakei-Navi/privacy")!) {
-                        Label("プライバシーポリシー", systemImage: "lock.shield")
+                    if let url = URL(string: "https://st0731.github.io/AI-Kakei-Navi/privacy") {
+                        Link(destination: url) {
+                            Label("プライバシーポリシー", systemImage: "lock.shield")
+                        }
+                        .foregroundStyle(.primary)
                     }
-                    .foregroundStyle(.primary)
 
-                    Link(destination: URL(string: "https://st0731.github.io/AI-Kakei-Navi/terms")!) {
-                        Label("利用規約", systemImage: "doc.text")
+                    if let url = URL(string: "https://st0731.github.io/AI-Kakei-Navi/terms") {
+                        Link(destination: url) {
+                            Label("利用規約", systemImage: "doc.text")
+                        }
+                        .foregroundStyle(.primary)
                     }
-                    .foregroundStyle(.primary)
 
-                    Link(destination: URL(string: "https://docs.google.com/forms/d/e/1FAIpQLSe3rI8B4OfYUH44n2T97RHnE2gz6DBmZ2rz1xCuIXrL7zJ0zw/viewform?usp=publish-editor")!) {
-                        Label("お問い合わせ", systemImage: "envelope")
+                    if let url = URL(string: "https://docs.google.com/forms/d/e/1FAIpQLSe3rI8B4OfYUH44n2T97RHnE2gz6DBmZ2rz1xCuIXrL7zJ0zw/viewform?usp=publish-editor") {
+                        Link(destination: url) {
+                            Label("お問い合わせ", systemImage: "envelope")
+                        }
+                        .foregroundStyle(.primary)
                     }
-                    .foregroundStyle(.primary)
 
                     LabeledContent("バージョン", value: appVersion)
                 }

@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 
 actor ParallelModelDownloader {
 
@@ -123,6 +124,12 @@ actor ParallelModelDownloader {
             // Large LFS file: parallel 20MB chunks via HTTP Range requests → 3-5x faster
             try await downloadChunked(from: url, to: dest, fileSize: lfs.size) { [self] delta in
                 Task { await self.addBytes(delta, onProgress: onProgress) }
+            }
+            do {
+                try verifySHA256(of: dest, expected: lfs.sha256)
+            } catch {
+                try? FileManager.default.removeItem(at: dest)
+                throw error
             }
         } else {
             var fileRequest = URLRequest(url: url)
@@ -268,6 +275,32 @@ actor ParallelModelDownloader {
         }
         guard written == data.count else { throw URLError(.cannotWriteToFile) }
         onBytes(Int64(data.count))
+    }
+
+    // Streams the file in 1MB chunks to avoid loading GB-scale model files into memory.
+    private nonisolated func verifySHA256(of fileURL: URL, expected: String) throws {
+        guard let stream = InputStream(url: fileURL) else {
+            throw URLError(.cannotOpenFile)
+        }
+        stream.open()
+        defer { stream.close() }
+
+        var hasher = SHA256()
+        let bufferSize = 1024 * 1024
+        let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
+        defer { buffer.deallocate() }
+
+        while stream.hasBytesAvailable {
+            let read = stream.read(buffer, maxLength: bufferSize)
+            if read < 0 { throw URLError(.cannotDecodeContentData) }
+            if read == 0 { break }
+            hasher.update(data: UnsafeRawBufferPointer(start: buffer, count: read))
+        }
+
+        let actual = hasher.finalize().map { String(format: "%02x", $0) }.joined()
+        guard actual == expected else {
+            throw URLError(.cannotDecodeContentData)
+        }
     }
 
     // Mirrors HubApi.localRepoLocation: <Documents>/huggingface/models/<modelID>/
