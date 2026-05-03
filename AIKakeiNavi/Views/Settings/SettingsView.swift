@@ -81,12 +81,12 @@ struct SettingsView: View {
 
                 // MARK: - 情報
                 Section("情報") {
-                    Link(destination: URL(string: "https://st0731.github.io/miruraku-kakeibo/privacy")!) {
+                    Link(destination: URL(string: "https://st0731.github.io/AI-Kakei-Navi/privacy")!) {
                         Label("プライバシーポリシー", systemImage: "lock.shield")
                     }
                     .foregroundStyle(.primary)
 
-                    Link(destination: URL(string: "https://st0731.github.io/miruraku-kakeibo/terms")!) {
+                    Link(destination: URL(string: "https://st0731.github.io/AI-Kakei-Navi/terms")!) {
                         Label("利用規約", systemImage: "doc.text")
                     }
                     .foregroundStyle(.primary)

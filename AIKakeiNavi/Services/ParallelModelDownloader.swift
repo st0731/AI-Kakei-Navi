@@ -101,8 +101,15 @@ actor ParallelModelDownloader {
 
         if FileManager.default.fileExists(atPath: dest.path),
            FileManager.default.fileExists(atPath: metaPath.path) {
-            recordCompletion(bytes: file.expectedBytes, onProgress: onProgress)
-            return
+            let attrs = try? FileManager.default.attributesOfItem(atPath: dest.path)
+            let actualSize = attrs?[.size] as? Int64 ?? 0
+            if file.expectedBytes == 0 || actualSize == file.expectedBytes {
+                recordCompletion(bytes: file.expectedBytes, onProgress: onProgress)
+                return
+            }
+            // サイズ不一致 = 前回の中断時に残った不完全なファイル → 削除して再ダウンロード
+            try? FileManager.default.removeItem(at: dest)
+            try? FileManager.default.removeItem(at: metaPath)
         }
 
         try FileManager.default.createDirectory(

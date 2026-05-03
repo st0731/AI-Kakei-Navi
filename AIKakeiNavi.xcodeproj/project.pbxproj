@@ -57,7 +57,7 @@
 /* Begin PBXNativeTarget section */
 		804799032F8FBCC70085E510 /* AIKakeiNavi */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 8047990F2F8FBCCB0085E510 /* Build configuration list for PBXNativeTarget AIKakeiNavi */;
+			buildConfigurationList = 8047990F2F8FBCCB0085E510 /* Build configuration list for PBXNativeTarget "AIKakeiNavi" */;
 			buildPhases = (
 				804799002F8FBCC70085E510 /* Sources */,
 				804799012F8FBCC70085E510 /* Frameworks */,
@@ -94,7 +94,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 804798FF2F8FBCC70085E510 /* Build configuration list for PBXProject AIKakeiNavi */;
+			buildConfigurationList = 804798FF2F8FBCC70085E510 /* Build configuration list for PBXProject "AIKakeiNavi" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -331,7 +331,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		804798FF2F8FBCC70085E510 /* Build configuration list for PBXProject AIKakeiNavi */ = {
+		804798FF2F8FBCC70085E510 /* Build configuration list for PBXProject "AIKakeiNavi" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				8047990D2F8FBCCB0085E510 /* Debug */,
@@ -340,7 +340,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		8047990F2F8FBCCB0085E510 /* Build configuration list for PBXNativeTarget AIKakeiNavi */ = {
+		8047990F2F8FBCCB0085E510 /* Build configuration list for PBXNativeTarget "AIKakeiNavi" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				804799102F8FBCCB0085E510 /* Debug */,

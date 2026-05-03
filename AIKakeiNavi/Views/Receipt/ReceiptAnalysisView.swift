@@ -225,8 +225,8 @@ struct ReceiptAnalysisView: View {
                 Button("カメラで撮影") { showCamera = true }
                 Button("フォトライブラリから選択") { showPhotosPicker = true }
             }
-            .sheet(isPresented: $showCamera) {
-                ImagePicker(image: $cameraImage)
+            .fullScreenCover(isPresented: $showCamera) {
+                DocumentCameraView(image: $cameraImage)
             }
             .onChange(of: cameraImage) { _, newImage in
                 guard let img = newImage else { return }
@@ -347,7 +347,9 @@ struct ReceiptAnalysisView: View {
 
 
     private func clearForm() {
-        editMemo = ""; editDate = Date(); editTotal = nil
+        editTotal = nil
+        editMemo = ""
+        editDate = Date()
         selectedImage = nil
         isInputActive = false
     }
@@ -370,34 +372,39 @@ struct ReceiptAnalysisView: View {
     }
 }
 
-// MARK: - ImagePicker
+// MARK: - DocumentCameraView
 
-struct ImagePicker: UIViewControllerRepresentable {
+struct DocumentCameraView: UIViewControllerRepresentable {
     @Binding var image: UIImage?
     @Environment(\.dismiss) private var dismiss
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
-    func makeUIViewController(context: Context) -> UIImagePickerController {
-        let picker = UIImagePickerController()
-        picker.sourceType = .camera
-        picker.delegate = context.coordinator
-        return picker
+    func makeUIViewController(context: Context) -> VNDocumentCameraViewController {
+        let scanner = VNDocumentCameraViewController()
+        scanner.delegate = context.coordinator
+        return scanner
     }
 
-    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+    func updateUIViewController(_ uiViewController: VNDocumentCameraViewController, context: Context) {}
 
-    class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
-        let parent: ImagePicker
-        init(_ parent: ImagePicker) { self.parent = parent }
+    class Coordinator: NSObject, VNDocumentCameraViewControllerDelegate {
+        let parent: DocumentCameraView
+        init(_ parent: DocumentCameraView) { self.parent = parent }
 
-        func imagePickerController(_ picker: UIImagePickerController,
-                                   didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
-            parent.image = info[.originalImage] as? UIImage
+        func documentCameraViewController(_ controller: VNDocumentCameraViewController,
+                                          didFinishWith scan: VNDocumentCameraScan) {
+            guard scan.pageCount > 0 else { parent.dismiss(); return }
+            parent.image = scan.imageOfPage(at: 0)
             parent.dismiss()
         }
 
-        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+        func documentCameraViewControllerDidCancel(_ controller: VNDocumentCameraViewController) {
+            parent.dismiss()
+        }
+
+        func documentCameraViewController(_ controller: VNDocumentCameraViewController,
+                                          didFailWithError error: Error) {
             parent.dismiss()
         }
     }
