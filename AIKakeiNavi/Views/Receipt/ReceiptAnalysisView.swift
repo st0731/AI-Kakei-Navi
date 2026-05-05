@@ -188,7 +188,8 @@ struct ReceiptAnalysisView: View {
                                     Image(systemName: "sparkles")
                                     Text("画像から自動入力")
                                 }
-                                .frame(maxWidth: .infinity).padding(.vertical, 12)
+                                .font(.subheadline)
+                                .frame(maxWidth: .infinity).padding(.vertical, 7)
                                 .background(Color.blue.opacity(0.1)).cornerRadius(12)
                             }
                             .photosPicker(isPresented: $showPhotosPicker, selection: $selectedItems, maxSelectionCount: 1, matching: .images)
@@ -199,7 +200,8 @@ struct ReceiptAnalysisView: View {
                                     Text("画像から自動入力")
                                     Text("(要ダウンロード)").font(.caption2)
                                 }
-                                .frame(maxWidth: .infinity).padding(.vertical, 12)
+                                .font(.subheadline)
+                                .frame(maxWidth: .infinity).padding(.vertical, 7)
                                 .background(Color.blue.opacity(0.1)).cornerRadius(12)
                             }
                         }
@@ -225,7 +227,8 @@ struct ReceiptAnalysisView: View {
                         Task { await saveToDatabaseAsync() }
                     } label: {
                         Label("履歴に保存する", systemImage: "tray.and.arrow.down.fill")
-                            .frame(maxWidth: .infinity).padding(.vertical, 12).bold()
+                            .font(.subheadline.bold())
+                            .frame(maxWidth: .infinity).padding(.vertical, 7)
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(isSaving || (editTotal == nil))

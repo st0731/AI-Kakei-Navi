@@ -45,41 +45,8 @@ struct AdviceView: View {
         }
     }
 
-    private var disclaimerBanner: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 6) {
-                Image(systemName: "info.circle.fill")
-                    .foregroundStyle(.secondary)
-                    .font(.caption)
-                Text("AIによる参考情報です。専門家の財務アドバイスの代替ではありません。")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.leading)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 6)
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            Divider()
-
-            HStack(spacing: 4) {
-                Image(systemName: "calendar")
-                Text("分析期間: \(advicePeriodRaw)")
-                Spacer()
-                Text("設定タブから変更できます")
-            }
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 5)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .background(Color(UIColor.secondarySystemGroupedBackground))
-    }
-
     private var chatInterface: some View {
         VStack(spacing: 0) {
-            disclaimerBanner
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 12) {
@@ -269,12 +236,21 @@ struct AdviceView: View {
             .padding(.horizontal)
             .padding(.vertical, 10)
 
-            Text("AIによる参考情報です。専門家の財務アドバイスの代替ではありません。")
-                .font(.caption2)
+            VStack(spacing: 3) {
+                Text("AIによる参考情報です。専門家の財務アドバイスの代替ではありません。")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                HStack(spacing: 4) {
+                    Image(systemName: "calendar")
+                        .font(.caption2)
+                    Text("分析期間: \(advicePeriodRaw) · 設定タブから変更できます")
+                        .font(.caption2)
+                }
                 .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal)
-                .padding(.bottom, 8)
+            }
+            .padding(.horizontal)
+            .padding(.bottom, 8)
         }
         .background(Color(UIColor.systemGroupedBackground))
     }
