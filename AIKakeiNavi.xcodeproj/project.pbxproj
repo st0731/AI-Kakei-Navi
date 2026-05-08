@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		804799142F90A26F0085E510 /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = 804799132F90A26F0085E510 /* MLXLLM */; };
 		804799162F90A26F0085E510 /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = 804799152F90A26F0085E510 /* MLXLMCommon */; };
+		804799192F90A26F0085E510 /* Tokenizers in Frameworks */ = {isa = PBXBuildFile; productRef = 804799182F90A26F0085E510 /* Tokenizers */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -30,6 +31,7 @@
 			files = (
 				804799162F90A26F0085E510 /* MLXLMCommon in Frameworks */,
 				804799142F90A26F0085E510 /* MLXLLM in Frameworks */,
+				804799192F90A26F0085E510 /* Tokenizers in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -74,6 +76,7 @@
 			packageProductDependencies = (
 				804799132F90A26F0085E510 /* MLXLLM */,
 				804799152F90A26F0085E510 /* MLXLMCommon */,
+				804799182F90A26F0085E510 /* Tokenizers */,
 			);
 			productName = AIKakeiNavi;
 			productReference = 804799042F8FBCC70085E510 /* AIKakeiNavi.app */;
@@ -104,7 +107,8 @@
 			mainGroup = 804798FB2F8FBCC70085E510;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				804799122F90A26F0085E510 /* XCRemoteSwiftPackageReference "mlx-swift-examples" */,
+				804799122F90A26F0085E510 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */,
+				804799172F90A26F0085E510 /* XCRemoteSwiftPackageReference "swift-transformers" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 804799052F8FBCC70085E510 /* Products */;
@@ -352,12 +356,20 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		804799122F90A26F0085E510 /* XCRemoteSwiftPackageReference "mlx-swift-examples" */ = {
+		804799122F90A26F0085E510 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/ml-explore/mlx-swift-examples";
+			repositoryURL = "https://github.com/ml-explore/mlx-swift-lm";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 2.29.1;
+				minimumVersion = 3.31.3;
+			};
+		};
+		804799172F90A26F0085E510 /* XCRemoteSwiftPackageReference "swift-transformers" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/huggingface/swift-transformers";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.0.0;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
@@ -365,13 +377,18 @@
 /* Begin XCSwiftPackageProductDependency section */
 		804799132F90A26F0085E510 /* MLXLLM */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 804799122F90A26F0085E510 /* XCRemoteSwiftPackageReference "mlx-swift-examples" */;
+			package = 804799122F90A26F0085E510 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
 			productName = MLXLLM;
 		};
 		804799152F90A26F0085E510 /* MLXLMCommon */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 804799122F90A26F0085E510 /* XCRemoteSwiftPackageReference "mlx-swift-examples" */;
+			package = 804799122F90A26F0085E510 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
 			productName = MLXLMCommon;
+		};
+		804799182F90A26F0085E510 /* Tokenizers */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 804799172F90A26F0085E510 /* XCRemoteSwiftPackageReference "swift-transformers" */;
+			productName = Tokenizers;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

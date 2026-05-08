@@ -22,10 +22,9 @@ class LLMService {
         do {
             try Task.checkCancellation()
 
-            let config = ModelConfiguration(directory: AIServiceManager.shared.localModelURL)
-
             let modelContainer = try await LLMModelFactory.shared.loadContainer(
-                configuration: config
+                from: AIServiceManager.shared.localModelURL,
+                using: HuggingFaceTokenizerLoader()
             )
 
             try Task.checkCancellation()
@@ -71,11 +70,11 @@ class LLMService {
 
             let result = try await modelContainer.perform { context in
                 let input = try await context.processor.prepare(
-                    input: .init(prompt: prompt)
+                    input: .init(messages: [["role": "user", "content": prompt]])
                 )
 
                 var params = GenerateParameters()
-                params.maxTokens = 1500
+                params.maxTokens = 200
 
                 let generateResult: GenerateResult = try MLXLMCommon.generate(
                     input: input,
@@ -95,7 +94,7 @@ class LLMService {
             print("====================================================================\n")
             #endif
 
-            // Qwen3等のThinkingモデルの<think>ブロックを除去し、JSON部分のみ抽出
+            // Qwen3の<think>ブロックを除去し、JSON部分のみ抽出
             var cleanedResult = result
             if cleanedResult.contains("</think>") {
                 let parts = cleanedResult.components(separatedBy: "</think>")
@@ -118,6 +117,10 @@ class LLMService {
             self.status = "未実行"
             return
         } catch {
+            #if DEBUG
+            print("LLM ERROR: \(error)")
+            print("LLM ERROR TYPE: \(type(of: error))")
+            #endif
             self.status = "解析中にエラーが発生しました。もう一度お試しください。"
         }
 
