@@ -285,16 +285,22 @@ struct MessageBubble: View {
     let message: ChatMessage
     private var isUser: Bool { message.role == "user" }
 
+    private var bubbleBackground: Color {
+        if isUser { return .blue }
+        if message.isBlocked { return Color.orange.opacity(0.10) }
+        return Color(UIColor.secondarySystemGroupedBackground)
+    }
+
     var body: some View {
         HStack(alignment: .bottom, spacing: 8) {
             if isUser { Spacer(minLength: 40) }
 
             if !isUser {
-                Image(systemName: "bubble.left.and.bubble.right.fill")
+                Image(systemName: message.isBlocked ? "exclamationmark.shield.fill" : "bubble.left.and.bubble.right.fill")
                     .font(.caption)
                     .foregroundColor(.white)
                     .padding(6)
-                    .background(Color.blue)
+                    .background(message.isBlocked ? Color.orange : Color.blue)
                     .clipShape(Circle())
             }
 
@@ -303,10 +309,18 @@ struct MessageBubble: View {
                 .foregroundColor(isUser ? .white : .primary)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
-                .background(isUser ? Color.blue : Color(UIColor.secondarySystemGroupedBackground))
+                .background(bubbleBackground)
                 .cornerRadius(18)
                 .cornerRadius(isUser ? 4 : 18, corners: isUser ? [.bottomRight] : [])
                 .cornerRadius(isUser ? 18 : 4, corners: isUser ? [] : [.bottomLeft])
+                .overlay(
+                    Group {
+                        if message.isBlocked {
+                            RoundedRectangle(cornerRadius: 18)
+                                .stroke(Color.orange.opacity(0.5), lineWidth: 1)
+                        }
+                    }
+                )
                 .contextMenu {
                     Button {
                         UIPasteboard.general.string = message.content

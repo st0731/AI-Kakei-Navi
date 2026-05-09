@@ -7,61 +7,62 @@ struct ChatMessage: Identifiable {
     let id = UUID()
     let role: String
     let content: String
+    var isBlocked: Bool = false
+}
+
+private struct ContentFilter {
+    static let blockedKeywords: [String] = [
+        "仮想通貨",
+        "ビットコイン",
+        "暗号資産",
+        "FX",
+        "レバレッジ",
+        "信用取引",
+        "株式投資",
+        "証券口座",
+    ]
+
+    static func blockedKeyword(in text: String) -> String? {
+        blockedKeywords.first { text.contains($0) }
+    }
 }
 
 // Stage 1: ユーザーの質問の意図カテゴリ
 enum QueryIntent: String {
-    case advice   // 節約・削減アドバイス
-    case overview // 支出全体の傾向・推移
-    case category // 特定カテゴリの詳細
-    case payment  // 支払い方法の分析
-    case score    // 家計スコア・評価
-    case weekday  // 曜日・時期の傾向
-    case help     // AIの機能・使い方
-    case other    // 上記以外（全データ使用）
+    case advice    // 節約アドバイス（ボトルネック・改善案）
+    case overview  // 支出全体サマリー・スコア・catch-all
+    case category  // カテゴリ別支出
+    case trend     // 時系列・月別推移
+    case necessity // 必要度別支出
+    case payment   // 支払い方法の分析
+    case weekday   // 曜日別支出傾向
+    case help      // アプリの機能・使い方
+    case offtopic  // 家計と無関係な質問
 
     // 意図 → 必要データセクションのマッピング（Swiftが決定論的に担う）
     var sections: [QuerySection] {
         switch self {
-        case .advice:   return [.summary, .saving]
-        case .overview: return [.summary, .trend, .necessity]
-        case .category: return [.category, .necessity, .summary]
-        case .payment:  return [.payment, .summary]
-        case .score:    return [.summary, .necessity]
-        case .weekday:  return [.weekday, .trend, .summary]
-        case .help:     return []
-        case .other:    return QuerySection.allCases
+        case .advice:    return [.summary, .saving]
+        case .overview:  return [.summary]
+        case .category:  return [.category]
+        case .trend:     return [.trend]
+        case .necessity: return [.necessity]
+        case .payment:   return [.payment]
+        case .weekday:   return [.weekday]
+        case .help:      return []
+        case .offtopic:  return []
         }
     }
 
     static func parse(from text: String) -> QueryIntent {
-        let word = text
-            .components(separatedBy: CharacterSet.whitespacesAndNewlines)
-            .first?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .lowercased() ?? ""
-
-        // 英単語の完全一致（理想ケース）
-        if let intent = QueryIntent(rawValue: word) { return intent }
-
-        // 日本語フォールバック（モデルが日本語を返した場合）
-        // 競合を避けるため weekday → score → advice → overview の順でチェック
-        if text.contains("曜日") || text.contains("週末") || text.contains("時期") { return .weekday }
-        if text.contains("スコア") || text.contains("評価") || text.contains("健全") || text.contains("点数")
-            || text.contains("大丈夫") || text.contains("使いすぎ") || text.contains("しすぎ") { return .score }
-        if text.contains("節約") || text.contains("アドバイス") || text.contains("削減")
-            || text.contains("無駄") || text.contains("貯金") || text.contains("減らす")
-            || text.contains("減らせ") || text.contains("改善") { return .advice }
-        if text.contains("全体") || text.contains("推移") || text.contains("概要") || text.contains("傾向")
-            || text.contains("今月") || text.contains("先月") || text.contains("毎月") { return .overview }
-        if text.contains("食費") || text.contains("交通") || text.contains("カテゴリ") || text.contains("詳細")
-            || text.contains("外食") || text.contains("サブスク") || text.contains("コンビニ")
-            || text.contains("日用品") || text.contains("趣味") || text.contains("娯楽") { return .category }
-        if text.contains("支払") || text.contains("現金") || text.contains("カード") || text.contains("決済")
-            || text.contains("電子マネー") || text.contains("キャッシュレス") { return .payment }
-        if text.contains("機能") || text.contains("使い方") || text.contains("できる")
-            || text.contains("できます") || text.contains("答えられ") { return .help }
-        return .other
+        // JSON形式 {"intent": "xxx"} をパース
+        if let data = text.data(using: .utf8),
+           let json = try? JSONSerialization.jsonObject(with: data) as? [String: String],
+           let intentStr = json["intent"],
+           let intent = QueryIntent(rawValue: intentStr.lowercased()) {
+            return intent
+        }
+        return .overview
     }
 }
 
@@ -97,14 +98,14 @@ enum AdviceAnalysisPeriod: String, CaseIterable {
 @MainActor
 @Observable
 class AdviceLLMService {
+    static let allCategories = ["食費", "服・美容費", "日用品・雑貨費", "交通・移動費", "通信費", "水道光熱費", "住居費", "医療・健康費", "趣味・娯楽費", "交際費", "サブスク費", "勉強費", "その他"]
+
     var messages: [ChatMessage] = []
     var isRunning = false
     var downloadProgress: Double = 0.0
     var statusText = ""
     var streamingResponse: String = ""
     var dataWarningMessage: String = ""
-
-    private let maxHistoryTurns = 5
 
     // MARK: - AnalysisContext（計算済み中間データ）
 
@@ -123,6 +124,13 @@ class AdviceLLMService {
         let categoryLines: String
         let paymentLines: String
         let weekdayLines: String
+        let monthlyLines: String
+        let trendByNecessityLines: String
+        let trendByCategoryLines: String
+        let weekdayByNecessityLines: String
+        let weekdayByCategoryLines: String
+        let topCategoryLines: String
+        let necessityByCategoryLines: String
     }
 
     // MARK: - Public API
@@ -138,6 +146,7 @@ class AdviceLLMService {
         dataWarningMessage = ""
 
         var finalResponse = ""
+        var isMessageBlocked = false
 
         #if DEBUG
         let sessionStart = Date()
@@ -172,18 +181,17 @@ class AdviceLLMService {
             #endif
 
             let intent = try await classifyIntent(userText: userText, modelContainer: modelContainer)
-            let sections = intent.sections
 
             #if DEBUG
             print("[AdviceLLM] ⏱ Stage 1 完了: \(String(format: "%.2f", Date().timeIntervalSince(stage1Start)))秒")
             print("[AdviceLLM]   intent  : \(intent.rawValue)")
-            print("[AdviceLLM]   sections: [\(sections.map { $0.rawValue }.joined(separator: ", "))]")
+            print("[AdviceLLM]   sections: [\(intent.sections.map { $0.rawValue }.joined(separator: ", "))]")
             #endif
 
             // Stage 2: 絞り込んだシステムプロンプトで回答生成
-            let systemPrompt = buildSystemPrompt(receipts: receipts, sections: sections)
+            let systemPrompt = buildSystemPrompt(receipts: receipts, intent: intent)
 
-            let conversationMessages = buildConversationMessages(system: systemPrompt)
+            let conversationMessages = buildConversationMessages(system: systemPrompt, userText: userText)
 
             #if DEBUG
             print("[AdviceLLM] ─── Stage 2: 回答生成 ────────────────────────")
@@ -252,6 +260,14 @@ class AdviceLLMService {
 
             finalResponse = cleanResponse(result)
 
+            if let hit = ContentFilter.blockedKeyword(in: finalResponse) {
+                finalResponse = "この回答には投資に関する情報が含まれていたため、表示できませんでした。節約や支出管理についての質問をお試しください。"
+                isMessageBlocked = true
+                #if DEBUG
+                print("[AdviceLLM] 🚫 コンテンツフィルター発動: キーワード「\(hit)」を検出")
+                #endif
+            }
+
             #if DEBUG
             print("[AdviceLLM] ⏱ Stage 2 完了: \(String(format: "%.2f", Date().timeIntervalSince(stage2Start)))秒")
             #endif
@@ -278,7 +294,7 @@ class AdviceLLMService {
         #endif
 
         streamingResponse = ""
-        messages.append(ChatMessage(role: "assistant", content: finalResponse))
+        messages.append(ChatMessage(role: "assistant", content: finalResponse, isBlocked: isMessageBlocked))
         statusText = ""
         isRunning = false
     }
@@ -294,25 +310,40 @@ class AdviceLLMService {
     private func classifyIntent(userText: String, modelContainer: MLXLMCommon.ModelContainer) async throws -> QueryIntent {
         let prompt = """
         /no_think
-        Classify the following question. Output ONLY one English word from the list below. No Japanese. No explanation.
+        以下の質問を分類し、JSONオブジェクトのみを出力してください。説明は不要です。
 
-        Valid words: advice, overview, category, payment, score, weekday, help, other
+        有効なインテント: advice, overview, category, trend, necessity, payment, weekday, help, offtopic
 
-        - advice  : 節約・出費削減アドバイスを求める（例: 節約のコツを教えて、無駄遣いはどこ?）
-        - overview: 支出全体の傾向・推移を知りたい（例: 今月どれくらい使った?、先月と比べて?）
-        - category: 特定カテゴリの詳細を知りたい（例: 食費はどのくらい?、交通費について教えて）
-        - payment : 支払い方法について知りたい（例: 現金とカードどちらが多い?）
-        - score   : 家計スコア・評価を知りたい（例: 家計は健全?、スコアは何点?）
-        - weekday : 曜日・時期の傾向を知りたい（例: 何曜日が多い?、週末に使いすぎ?）
-        - help    : このAIの機能・使い方を知りたい（例: 何ができる?）
-        - other   : 上記に当てはまらない
+        - advice   : 節約・出費削減アドバイスを求める（例: 節約のコツを教えて、一番無駄な出費はどこ?、どこを削減すべき?）
+        - overview : 支出について大まかに知りたい、支出のスコアを知りたい、支出を評価してほしい（例: 全体的な傾向は?、家計は健全?）
+        - category : 特定カテゴリ(\(Self.allCategories.joined(separator: "、")))の金額・詳細を知りたい（例: 今月の食費は?、食費はどのくらい?、交通費について教えて）
+        - trend    : 時系列・月別の推移を知りたい、時系列で比較したい（例: 先月の支出は?、月ごとの変化は?、支出傾向の推移を教えて）
+        - necessity: 必要度(必要・便利・贅沢)別支出を知りたい（例: 贅沢支出はどれくらい?、必要支出の割合は?、先月の便利支出の金額を教えて）
+        - payment  : 支払い方法(現金、クレジットカード、QRコード決済、電子マネー)について知りたい（例: 現金とカードどちらが多い?）
+        - weekday  : 曜日の傾向を知りたい（例: 何曜日の支出が多い?）
+        - help     : このAIの機能・使い方を知りたい（例: 何ができる?、どういうアプリ？）
+        - offtopic : 家計・支出と無関係な質問（例: 明日の天気は?、最近のニュースは？、食器の洗い方は？）
 
-        Question: \(userText)
-        Answer (one English word only):
+        【分類例】
+        Q: 節約のコツを教えて → {"intent": "advice"}
+        Q: 今月の合計支出はいくら？ → {"intent": "overview"}
+        Q: 食費はどれくらい使った？ → {"intent": "category"}
+        Q: 先月と今月の支出を比べて → {"intent": "trend"}
+        Q: 毎月どのくらい使っている？ → {"intent": "trend"}
+        Q: 贅沢支出はどれくらい？ → {"intent": "necessity"}
+        Q: 現金とカードどちらが多い？ → {"intent": "payment"}
+        Q: 何曜日に一番使っている？ → {"intent": "weekday"}
+        Q: このAIで何ができる？ → {"intent": "help"}
+        Q: おすすめのレシピを教えて → {"intent": "offtopic"}
+
+        重要: {"intent": "advice"} のような有効なJSONのみを出力してください。上記のインテントから一つを選択してください。
+
+        質問: \(userText)
+        回答:
         """
 
         #if DEBUG
-        print("[AdviceLLM] 🔍 分類プロンプト送信中（maxTokens=20）...")
+        print("[AdviceLLM] 🔍 分類プロンプト送信中（maxTokens=50）...")
         #endif
 
         let raw = try await modelContainer.perform { context in
@@ -320,7 +351,7 @@ class AdviceLLMService {
                 input: .init(messages: [["role": "user", "content": prompt]])
             )
             var params = GenerateParameters()
-            params.maxTokens = 20
+            params.maxTokens = 50
             let generateResult: GenerateResult = try MLXLMCommon.generate(
                 input: input, parameters: params, context: context,
                 didGenerate: { _ in .more }
@@ -332,17 +363,11 @@ class AdviceLLMService {
         }
 
         let cleaned = cleanResponse(raw)
-        let firstWord = cleaned
-            .components(separatedBy: CharacterSet.whitespacesAndNewlines)
-            .first?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .lowercased() ?? ""
         let intent = QueryIntent.parse(from: cleaned)
 
         #if DEBUG
         print("[AdviceLLM]   クリーニング後: \"\(cleaned)\"")
-        print("[AdviceLLM]   パース対象語: \"\(firstWord)\"")
-        print("[AdviceLLM]   解釈結果: \(firstWord == intent.rawValue ? "✅ 既知カテゴリ" : "⚠️ 未知語 → .other にフォールバック")")
+        print("[AdviceLLM]   解釈結果: \(intent != .overview || cleaned.contains("\"intent\"") ? "✅ \(intent.rawValue)" : "⚠️ JSONパース失敗 → .overview にフォールバック")")
         #endif
 
         return intent
@@ -350,10 +375,29 @@ class AdviceLLMService {
 
     // MARK: - Stage 2: システムプロンプト構築
 
-    private func buildSystemPrompt(receipts: [SavedReceipt], sections: [QuerySection]) -> String {
+    private func buildSystemPrompt(receipts: [SavedReceipt], intent: QueryIntent) -> String {
+        let sections = intent.sections
+
         #if DEBUG
-        print("[AdviceLLM] 📝 buildSystemPrompt: sections=[\(sections.map { $0.rawValue }.joined(separator: ", "))]")
+        print("[AdviceLLM] 📝 buildSystemPrompt: intent=\(intent.rawValue) sections=[\(sections.map { $0.rawValue }.joined(separator: ", "))]")
         #endif
+
+        // offtopic: 家計と無関係な質問、またはAI自身への質問
+        if intent == .offtopic {
+            return """
+            あなたはAI家計ナビの節約AIです。登録されたレシートをもとに家計・支出に関する質問に答えます。
+            節約アドバイス、支出全体のサマリー、カテゴリ別・月別・曜日別の支出集計、支払い方法の確認ができます。
+
+            # 命令文：
+            ユーザーの質問を確認し、以下の方針で回答してください。
+            - このAIの機能・使い方を聞いている場合（例: 何ができる？、使い方は？、どんな質問に答えられる？）は、上記の機能を簡潔に説明してください。
+            - 家計・支出と全く無関係な質問（例: 天気、料理、ダイエット、ニュース）は、回答できないことを丁寧に伝え、家計や節約についての質問を促してください。
+
+            # 回答の基本原則（最優先）：
+            1. **簡潔な回答**: 回答は150字以内で。
+            2. **丁寧な言葉使い**: 回答では敬語を使用して下さい。
+            """
+        }
 
         // help: データ不要、固定文言
         if sections.isEmpty {
@@ -425,7 +469,7 @@ class AdviceLLMService {
 
         parts.append("""
         # 回答の基本原則（最優先）：
-        1. **数値の透明性**: 金額やパーセントを出す際は必ず「〇〇円（総支出の〇〇%）」のように記述して下さい。
+        1. **数値の透明性**: 質問に直接関係する数値のみを引用し、金額やパーセントを出す際は必ず「〇〇円（総支出の〇〇%）」のように記述して下さい。
         2. **簡潔な回答**: 回答は300字以内で簡潔に。
         3. **丁寧な言葉使い**: 回答では敬語を使用して下さい。
         4. **誠実な回答**: ユーザの質問内容に関連のある回答のみをして下さい。
@@ -563,7 +607,7 @@ class AdviceLLMService {
             return "   - \(nec)：\(amount)円（総支出の\(pct)%）"
         }.joined(separator: "\n")
 
-        let allCategories = ["食費", "服・美容費", "日用品・雑貨費", "交通・移動費", "通信費", "水道光熱費", "住居費", "医療・健康費", "趣味・娯楽費", "交際費", "サブスク費", "勉強費", "その他"]
+        let allCategories = Self.allCategories
         let categoryGroupsAll = Dictionary(grouping: target) { $0.category }
         let categoryLines = allCategories.map { cat -> String in
             let items = categoryGroupsAll[cat] ?? []
@@ -609,6 +653,103 @@ class AdviceLLMService {
             ? "曜日による支出の偏りは特にありません。"
             : "\(biasedWeekdays.joined(separator: "、"))に支出が集中しています。"
 
+        // 月別実数値
+        let monthlyLines = sortedMonths.map { key -> String in
+            let amount = monthlyGroups[key]?.reduce(0) { $0 + $1.total } ?? 0
+            let pct = totalAmount > 0 ? Int(Double(amount) / Double(totalAmount) * 100) : 0
+            return "   - \(key): \(amount)円（全体の\(pct)%）"
+        }.joined(separator: "\n")
+
+        // 時系列×必要度クロス集計
+        let trendByNecessityLines = sortedMonths.map { key -> String in
+            let monthReceipts = monthlyGroups[key] ?? []
+            let monthTotal = monthReceipts.reduce(0) { $0 + $1.total }
+            let necGroups = Dictionary(grouping: monthReceipts) { $0.necessity }
+            let necParts = ["必要", "便利", "贅沢"].map { nec -> String in
+                let v = necGroups[nec]?.reduce(0) { $0 + $1.total } ?? 0
+                let pct = monthTotal > 0 ? Int(Double(v) / Double(monthTotal) * 100) : 0
+                return "\(nec) \(v)円(\(pct)%)"
+            }.joined(separator: "、")
+            return "   - \(key)（\(monthTotal)円）: \(necParts)"
+        }.joined(separator: "\n")
+
+        // 時系列×カテゴリクロス集計
+        let trendByCategoryLines = sortedMonths.map { key -> String in
+            let monthReceipts = monthlyGroups[key] ?? []
+            let monthTotal = monthReceipts.reduce(0) { $0 + $1.total }
+            let catGroups = Dictionary(grouping: monthReceipts) { $0.category }
+            let catParts = allCategories.compactMap { cat -> String? in
+                let v = catGroups[cat]?.reduce(0) { $0 + $1.total } ?? 0
+                guard v > 0 else { return nil }
+                let pct = monthTotal > 0 ? Int(Double(v) / Double(monthTotal) * 100) : 0
+                return "\(cat) \(v)円(\(pct)%)"
+            }.joined(separator: "、")
+            return "   - \(key)（\(monthTotal)円）: \(catParts.isEmpty ? "データなし" : catParts)"
+        }.joined(separator: "\n")
+
+        // 曜日×必要度クロス集計
+        let weekdayByNecessityLines = (1...7).map { wd -> String in
+            let wdReceipts = weekdayGroups[wd] ?? []
+            let wdTotal = wdReceipts.reduce(0) { $0 + $1.total }
+            let necGroups = Dictionary(grouping: wdReceipts) { $0.necessity }
+            let necParts = ["必要", "便利", "贅沢"].map { nec -> String in
+                let v = necGroups[nec]?.reduce(0) { $0 + $1.total } ?? 0
+                let pct = wdTotal > 0 ? Int(Double(v) / Double(wdTotal) * 100) : 0
+                return "\(nec) \(v)円(\(pct)%)"
+            }.joined(separator: "、")
+            return "   - \(weekdayNames[wd])曜日（\(wdTotal)円）: \(necParts)"
+        }.joined(separator: "\n")
+
+        // 曜日×カテゴリクロス集計
+        let weekdayByCategoryLines = (1...7).map { wd -> String in
+            let wdReceipts = weekdayGroups[wd] ?? []
+            let wdTotal = wdReceipts.reduce(0) { $0 + $1.total }
+            let catGroups = Dictionary(grouping: wdReceipts) { $0.category }
+            let catParts = allCategories.compactMap { cat -> String? in
+                let v = catGroups[cat]?.reduce(0) { $0 + $1.total } ?? 0
+                guard v > 0 else { return nil }
+                let pct = wdTotal > 0 ? Int(Double(v) / Double(wdTotal) * 100) : 0
+                return "\(cat) \(v)円(\(pct)%)"
+            }.joined(separator: "、")
+            return "   - \(weekdayNames[wd])曜日（\(wdTotal)円）: \(catParts.isEmpty ? "支出なし" : catParts)"
+        }.joined(separator: "\n")
+
+        // 支出上位カテゴリ Top3
+        let topCategoryLines = allCategories
+            .map { cat -> (String, Int) in
+                let amount = categoryGroupsAll[cat]?.reduce(0) { $0 + $1.total } ?? 0
+                return (cat, amount)
+            }
+            .filter { $0.1 > 0 }
+            .sorted { $0.1 > $1.1 }
+            .prefix(3)
+            .map { cat, amount -> String in
+                let pct = totalAmount > 0 ? Int(Double(amount) / Double(totalAmount) * 100) : 0
+                return "   - \(cat)：\(amount)円（総支出の\(pct)%）"
+            }
+            .joined(separator: "\n")
+
+        // 必要度×カテゴリクロス集計（必要度視点：各必要度の上位カテゴリ）
+        let necessityByCategoryLines = ["必要", "便利", "贅沢"].map { nec -> String in
+            let necItems = necessityGroups[nec] ?? []
+            let necTotal = necItems.reduce(0) { $0 + $1.total }
+            let necPct = totalAmount > 0 ? Int(Double(necTotal) / Double(totalAmount) * 100) : 0
+            let catGroups = Dictionary(grouping: necItems) { $0.category }
+            let topCats = allCategories
+                .compactMap { cat -> (String, Int)? in
+                    let v = catGroups[cat]?.reduce(0) { $0 + $1.total } ?? 0
+                    return v > 0 ? (cat, v) : nil
+                }
+                .sorted { $0.1 > $1.1 }
+                .prefix(3)
+                .map { cat, amount -> String in
+                    let pct = necTotal > 0 ? Int(Double(amount) / Double(necTotal) * 100) : 0
+                    return "\(cat) \(amount)円(\(pct)%)"
+                }
+                .joined(separator: "、")
+            return "   - \(nec)（\(necTotal)円, 総支出の\(necPct)%）: 上位カテゴリ → \(topCats.isEmpty ? "支出なし" : topCats)"
+        }.joined(separator: "\n")
+
         let context = AnalysisContext(
             periodLabel: periodLabel,
             totalAmount: totalAmount,
@@ -623,7 +764,14 @@ class AdviceLLMService {
             necessityLines: necessityLines,
             categoryLines: categoryLines,
             paymentLines: paymentLines,
-            weekdayLines: weekdayLines
+            weekdayLines: weekdayLines,
+            monthlyLines: monthlyLines,
+            trendByNecessityLines: trendByNecessityLines,
+            trendByCategoryLines: trendByCategoryLines,
+            weekdayByNecessityLines: weekdayByNecessityLines,
+            weekdayByCategoryLines: weekdayByCategoryLines,
+            topCategoryLines: topCategoryLines,
+            necessityByCategoryLines: necessityByCategoryLines
         )
 
         #if DEBUG
@@ -645,10 +793,19 @@ class AdviceLLMService {
     private func sectionSummary(_ ctx: AnalysisContext) -> String {
         """
         ## 支出サマリー（\(ctx.periodLabel)）
-        以下の内容をユーザーに伝えてください：
         ・合計支出：\(ctx.totalAmount)円（\(ctx.recordCount)件）
-        ・支出健全度スコア：\(ctx.spendingScore)点
+        ・月平均支出：\(ctx.avgMonthlyTotal)円
+        ・支出増減傾向：\(ctx.spendingTrendMessage)
+
+        【支出健全度スコア】
+        ・スコア：\(ctx.spendingScore)点
         ・\(ctx.scoreMessage)
+
+        【必要度別内訳】
+        \(ctx.necessityLines)
+
+        【支出上位カテゴリ Top3】
+        \(ctx.topCategoryLines)
         """
     }
 
@@ -675,6 +832,15 @@ class AdviceLLMService {
         ## 支出の推移
         \(ctx.spendingTrendMessage)
         月平均支出：\(ctx.avgMonthlyTotal)円
+
+        【月別支出】
+        \(ctx.monthlyLines)
+
+        【月別×必要度クロス集計】
+        \(ctx.trendByNecessityLines)
+
+        【月別×カテゴリクロス集計】
+        \(ctx.trendByCategoryLines)
         """
     }
 
@@ -685,6 +851,12 @@ class AdviceLLMService {
 
         【曜日別内訳】
         \(ctx.weekdayLines)
+
+        【曜日×必要度クロス集計】
+        \(ctx.weekdayByNecessityLines)
+
+        【曜日×カテゴリクロス集計】
+        \(ctx.weekdayByCategoryLines)
         """
     }
 
@@ -693,14 +865,29 @@ class AdviceLLMService {
         ## 必要度別支出
         【必要度別内訳】
         \(ctx.necessityLines)
+
+        【必要度×カテゴリクロス集計】
+        \(ctx.necessityByCategoryLines)
+
+        【月別×必要度クロス集計（必要度×時系列）】
+        \(ctx.trendByNecessityLines)
+
+        【曜日別×必要度クロス集計（必要度×曜日）】
+        \(ctx.weekdayByNecessityLines)
         """
     }
 
     private func sectionCategory(_ ctx: AnalysisContext) -> String {
         """
         ## カテゴリ別支出
-        【カテゴリ別内訳】
+        【カテゴリ別内訳（カテゴリ×必要度）】
         \(ctx.categoryLines)
+
+        【月別×カテゴリクロス集計（カテゴリ×時系列）】
+        \(ctx.trendByCategoryLines)
+
+        【曜日別×カテゴリクロス集計（カテゴリ×曜日）】
+        \(ctx.weekdayByCategoryLines)
         """
     }
 
@@ -746,19 +933,11 @@ class AdviceLLMService {
 
     // MARK: - Conversation Helpers
 
-    private func buildConversationMessages(system: String) -> [[String: any Sendable]] {
-        var result: [[String: any Sendable]] = [["role": "system", "content": system]]
-        for msg in recentHistory() {
-            let content = msg.role == "user" ? "/no_think \(msg.content)" : msg.content
-            result.append(["role": msg.role == "user" ? "user" : "assistant", "content": content])
-        }
-        return result
-    }
-
-    private func recentHistory() -> [ChatMessage] {
-        let maxMessages = maxHistoryTurns * 2
-        if messages.count <= maxMessages { return messages }
-        return Array(messages.suffix(maxMessages))
+    private func buildConversationMessages(system: String, userText: String) -> [[String: any Sendable]] {
+        [
+            ["role": "system", "content": system],
+            ["role": "user", "content": "/no_think \(userText)"]
+        ]
     }
 
     private func cleanResponse(_ text: String) -> String {
