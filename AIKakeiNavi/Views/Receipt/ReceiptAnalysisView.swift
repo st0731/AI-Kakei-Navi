@@ -38,6 +38,7 @@ struct ReceiptAnalysisView: View {
     @State private var editWarikanAmount: Int? = nil
     @State private var selectedImage: UIImage? = nil
     @State private var showFullScreenImage = false
+    @State private var isOCRRunning = false
 
     static let weekdays = ["月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日", "日曜日", "不明"]
     static let necessityOptions = ["必要", "便利", "贅沢"]
@@ -237,8 +238,9 @@ struct ReceiptAnalysisView: View {
                 .background(Color(UIColor.systemGroupedBackground))
             }
             .overlay {
-                if llmService.isRunning { LoadingOverlay(message: llmService.status) }
-                if isSaving { LoadingOverlay(message: "保存中...") }
+                if isOCRRunning { LoadingOverlay(message: "画像を読み取り中...") }
+                else if llmService.isRunning { LoadingOverlay(message: llmService.status) }
+                else if isSaving { LoadingOverlay(message: "保存中...") }
             }
             .sheet(isPresented: $showDownloadSheet) {
                 ModelDownloadView()
@@ -363,15 +365,22 @@ struct ReceiptAnalysisView: View {
     func processUIImage(_ uiImage: UIImage) async {
         guard let cgImage = uiImage.cgImage else { return }
 
-        await MainActor.run { selectedImage = uiImage }
-
-        let request = VNRecognizeTextRequest()
-        request.recognitionLanguages = ["ja-JP"]
+        await MainActor.run {
+            selectedImage = uiImage
+            isOCRRunning = true
+        }
 
         do {
-            try VNImageRequestHandler(cgImage: cgImage).perform([request])
-            let observations = request.results ?? []
-            let fullText = observations.compactMap { $0.topCandidates(1).first?.string }.joined(separator: " ")
+            let fullText = try await Task.detached(priority: .userInitiated) {
+                let request = VNRecognizeTextRequest()
+                request.recognitionLanguages = ["ja-JP"]
+                try VNImageRequestHandler(cgImage: cgImage).perform([request])
+                return (request.results ?? [])
+                    .compactMap { $0.topCandidates(1).first?.string }
+                    .joined(separator: " ")
+            }.value
+
+            await MainActor.run { isOCRRunning = false }
 
             guard !fullText.isEmpty else {
                 await MainActor.run { selectedItems = []; showProcessingError = true }
@@ -394,6 +403,7 @@ struct ReceiptAnalysisView: View {
             }
         } catch {
             await MainActor.run {
+                isOCRRunning = false
                 selectedItems = []
                 showProcessingError = true
             }

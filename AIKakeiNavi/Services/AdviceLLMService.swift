@@ -307,7 +307,44 @@ class AdviceLLMService {
 
     // MARK: - Stage 1: 意図分類
 
+    /// LLM 呼び出し前のキーワード先読み判定。確信度が高いケースのみ返し、それ以外は nil で LLM に委ねる。
+    private static func keywordPrefilter(_ text: String) -> QueryIntent? {
+        let paymentKeywords   = ["現金", "クレジットカード", "QRコード決済", "電子マネー", "キャッシュレス", "支払い方法"]
+        let paymentExclusions = ["おすすめ", "変化", "推移", "増えた", "減った", "変わった"]
+        let weekdayKeywords   = ["月曜", "火曜", "水曜", "木曜", "金曜", "土曜", "日曜", "曜日", "週末", "平日"]
+        let necessityCompound = ["必要支出", "便利支出", "贅沢支出", "必要度"]
+        let adviceTriggers    = ["節約", "削減", "見直し", "改善", "減らす", "コツ", "アドバイス"]
+
+        // 1. payment: 支払い方法固有語 ── 推薦・変化系は除外して LLM に委ねる
+        if paymentKeywords.contains(where: { text.contains($0) }) {
+            if !paymentExclusions.contains(where: { text.contains($0) }) {
+                return .payment
+            }
+        }
+        // 2. weekday: 曜日名・週末・平日
+        if weekdayKeywords.contains(where: { text.contains($0) }) { return .weekday }
+
+        // 3. necessity: 複合語のみ（単体の「必要」は対象外）
+        if necessityCompound.contains(where: { text.contains($0) }) { return .necessity }
+
+        // 4. category: カテゴリ名あり かつ アドバイストリガーなし
+        let hasAdviceTrigger = adviceTriggers.contains(where: { text.contains($0) })
+        if !hasAdviceTrigger {
+            if allCategories.contains(where: { text.contains($0) }) { return .category }
+        }
+
+        return nil
+    }
+
     private func classifyIntent(userText: String, modelContainer: MLXLMCommon.ModelContainer) async throws -> QueryIntent {
+        // キーワード先読みで確信度高く判定できる場合は LLM をスキップ
+        if let prefiltered = Self.keywordPrefilter(userText) {
+            #if DEBUG
+            print("[AdviceLLM]   キーワード先読み → \(prefiltered.rawValue)（LLMスキップ）")
+            #endif
+            return prefiltered
+        }
+
         let prompt = """
         /no_think
         以下の質問を分類し、JSONオブジェクトのみを出力してください。説明は不要です。
@@ -316,25 +353,29 @@ class AdviceLLMService {
 
         - advice   : 節約・出費削減アドバイスを求める（例: 節約のコツを教えて、一番無駄な出費はどこ?、どこを削減すべき?）
         - overview : 支出について大まかに知りたい、支出のスコアを知りたい、支出を評価してほしい（例: 全体的な傾向は?、家計は健全?）
-        - category : 特定カテゴリ(\(Self.allCategories.joined(separator: "、")))の金額・詳細を知りたい（例: 今月の食費は?、食費はどのくらい?、交通費について教えて）
-        - trend    : 時系列・月別の推移を知りたい、時系列で比較したい（例: 先月の支出は?、月ごとの変化は?、支出傾向の推移を教えて）
+        - category : 特定カテゴリ(\(Self.allCategories.joined(separator: "、")))の金額・詳細を知りたい（例: 今月の食費は?、食費はどのくらい?、交通費について教えて、コンビニにいくら使った?、スマホ代は?）
+        - trend    : 時系列・月別の推移を知りたい、時系列で比較したい（例: 先月の支出は?、月ごとの変化は?、支出傾向の推移を教えて、クレカと現金の支払いはどう変化した?）
         - necessity: 必要度(必要・便利・贅沢)別支出を知りたい（例: 贅沢支出はどれくらい?、必要支出の割合は?、先月の便利支出の金額を教えて）
-        - payment  : 支払い方法(現金、クレジットカード、QRコード決済、電子マネー)について知りたい（例: 現金とカードどちらが多い?）
+        - payment  : 自分の支払い方法の実績・割合を知りたい（例: 現金とカードどちらが多い?、QRコード決済の割合は?）※カードや決済サービスの推薦・比較はofftopic
         - weekday  : 曜日の傾向を知りたい（例: 何曜日の支出が多い?）
         - help     : このAIの機能・使い方を知りたい（例: 何ができる?、どういうアプリ？）
-        - offtopic : 家計・支出と無関係な質問（例: 明日の天気は?、最近のニュースは？、食器の洗い方は？）
+        - offtopic : 家計・支出と無関係な質問、または金融商品の推薦・比較（例: 明日の天気は?、最近のニュースは？、おすすめのクレジットカードは?、ダイエット方法は?）
 
         【分類例】
         Q: 節約のコツを教えて → {"intent": "advice"}
         Q: 今月の合計支出はいくら？ → {"intent": "overview"}
         Q: 食費はどれくらい使った？ → {"intent": "category"}
+        Q: コンビニにどのくらい使ってる？ → {"intent": "category"}
+        Q: スマホ代は？ → {"intent": "category"}
         Q: 先月と今月の支出を比べて → {"intent": "trend"}
         Q: 毎月どのくらい使っている？ → {"intent": "trend"}
+        Q: クレカと現金の支払いはどう変化した？ → {"intent": "trend"}
         Q: 贅沢支出はどれくらい？ → {"intent": "necessity"}
         Q: 現金とカードどちらが多い？ → {"intent": "payment"}
         Q: 何曜日に一番使っている？ → {"intent": "weekday"}
         Q: このAIで何ができる？ → {"intent": "help"}
         Q: おすすめのレシピを教えて → {"intent": "offtopic"}
+        Q: おすすめのクレジットカードは？ → {"intent": "offtopic"}
 
         重要: {"intent": "advice"} のような有効なJSONのみを出力してください。上記のインテントから一つを選択してください。
 
