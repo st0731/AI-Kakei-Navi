@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI家計ナビ — 撮るだけで家計管理が完結</title>
+  <meta name="description" content="レシートや電子マネーの決済画面を撮るだけ。無制限の自動入力から節約アドバイスまで、すべてiPhone上で処理。データはクラウドへ一切送信されません。">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
+      color: #1c1c1e;
+      background: #fff;
+      line-height: 1.7;
+    }
+
+    /* Hero */
+    .hero {
+      background: linear-gradient(160deg, #ff8c00 0%, #c0290a 100%);
+      color: #fff;
+      text-align: center;
+      padding: 80px 24px 64px;
+    }
+    .hero-icon {
+      width: 120px;
+      height: 120px;
+      border-radius: 26px;
+      background: rgba(255,255,255,0.15);
+      margin: 0 auto 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 56px;
+    }
+    .hero h1 {
+      font-size: 2.4rem;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      margin-bottom: 12px;
+    }
+    .hero p {
+      font-size: 1.1rem;
+      opacity: 0.92;
+      max-width: 480px;
+      margin: 0 auto 36px;
+    }
+    .badge {
+      display: inline-block;
+      background: #fff;
+      color: #c0290a;
+      font-weight: 700;
+      font-size: 0.85rem;
+      padding: 6px 16px;
+      border-radius: 999px;
+      margin: 4px;
+    }
+
+    /* Features */
+    .section {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 64px 24px;
+    }
+    .section h2 {
+      font-size: 1.6rem;
+      font-weight: 800;
+      text-align: center;
+      margin-bottom: 40px;
+      color: #1c1c1e;
+    }
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 24px;
+    }
+    .feature {
+      background: #f5f5f7;
+      border-radius: 16px;
+      padding: 28px 24px;
+    }
+    .feature-icon {
+      font-size: 2rem;
+      margin-bottom: 12px;
+    }
+    .feature h3 {
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .feature p {
+      font-size: 0.9rem;
+      color: #3a3a3c;
+      line-height: 1.6;
+    }
+
+    /* Privacy */
+    .privacy-section {
+      background: #1c1c1e;
+      color: #fff;
+      text-align: center;
+      padding: 64px 24px;
+    }
+    .privacy-section h2 {
+      font-size: 1.6rem;
+      font-weight: 800;
+      margin-bottom: 12px;
+    }
+    .privacy-section .lead {
+      font-size: 1rem;
+      opacity: 0.8;
+      max-width: 520px;
+      margin: 0 auto 36px;
+    }
+    .privacy-points {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 12px;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    .privacy-point {
+      background: rgba(255,255,255,0.1);
+      border-radius: 10px;
+      padding: 10px 20px;
+      font-size: 0.9rem;
+    }
+
+    /* Footer */
+    footer {
+      text-align: center;
+      padding: 40px 24px;
+      font-size: 0.85rem;
+      color: #636366;
+    }
+    footer a { color: #007aff; text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+    .footer-links { margin-bottom: 12px; }
+    .footer-links a { margin: 0 12px; }
+
+    @media (max-width: 480px) {
+      .hero h1 { font-size: 1.8rem; }
+      .section h2 { font-size: 1.3rem; }
+    }
+  </style>
+</head>
+<body>
+
+<section class="hero">
+  <div class="hero-icon">📱</div>
+  <h1>AI家計ナビ</h1>
+  <p>レシートを撮るだけで家計管理が完結。<br>すべてiPhone上で処理するから、データはクラウドへ一切送信されません。</p>
+  <span class="badge">完全オフライン対応</span>
+  <span class="badge">プライバシー保護</span>
+  <span class="badge">無制限の自動入力</span>
+</section>
+
+<section class="section">
+  <h2>主な機能</h2>
+  <div class="features">
+    <div class="feature">
+      <div class="feature-icon">📸</div>
+      <h3>無制限のレシート自動読み取り</h3>
+      <p>カメラで撮影するか写真から選択するだけ。品目・金額・日付を自動認識し、手入力の手間をゼロにします。</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">💬</div>
+      <h3>オンデバイスAI節約アドバイス</h3>
+      <p>過去の支出をもとにAIが節約アドバイスをチャット形式で提供。会話内容が外部に出ることはありません。</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">📊</div>
+      <h3>グラフ・支出分析</h3>
+      <p>月別・カテゴリ別のグラフで支出パターンを把握。「必要・便利・贅沢」の3段階スコアで優先度管理も。</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">📋</div>
+      <h3>レシート履歴管理</h3>
+      <p>過去のレシートをいつでも確認・編集・削除。自動読み取り結果を手動で修正することもできます。</p>
+    </div>
+  </div>
+</section>
+
+<section class="privacy-section">
+  <h2>プライバシーへのこだわり</h2>
+  <p class="lead">すべての処理はあなたのiPhone上で完結します。レシート画像も支出データも、クラウドへ一切送信されません。</p>
+  <div class="privacy-points">
+    <div class="privacy-point">すべての処理はデバイス内で完結</div>
+    <div class="privacy-point">データの外部送信なし</div>
+    <div class="privacy-point">広告・トラッキングなし</div>
+    <div class="privacy-point">完全オフライン対応</div>
+    <div class="privacy-point">サブスクリプションなし</div>
+  </div>
+</section>
+
+<footer>
+  <div class="footer-links">
+    <a href="privacy-policy.html">プライバシーポリシー</a>
+    <a href="support.html">サポート</a>
+  </div>
+  <p>&copy; 2026 AI家計ナビ</p>
+</footer>
+
+</body>
+</html>
