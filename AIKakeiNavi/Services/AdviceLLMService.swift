@@ -28,7 +28,6 @@ enum QueryIntent: String {
     case category  // カテゴリ別支出
     case trend     // 時系列・月別推移
     case necessity // 必要度別支出
-    case payment   // 支払い方法の分析
     case weekday   // 曜日別支出傾向
     case help      // アプリの機能・使い方
     case offtopic  // 家計と無関係な質問
@@ -41,7 +40,6 @@ enum QueryIntent: String {
         case .category:  return [.category]
         case .trend:     return [.trend]
         case .necessity: return [.necessity]
-        case .payment:   return [.payment]
         case .weekday:   return [.weekday]
         case .help:      return []
         case .offtopic:  return []
@@ -64,7 +62,6 @@ enum QueryIntent: String {
 enum QuerySection: String, CaseIterable {
     case summary   = "summary"
     case saving    = "saving"
-    case payment   = "payment"
     case trend     = "trend"
     case weekday   = "weekday"
     case necessity = "necessity"
@@ -113,12 +110,10 @@ class AdviceLLMService {
         let spendingScore: Int
         let scoreMessage: String
         let savingPotentialMessage: String
-        let paymentMethodMessage: String
         let spendingTrendMessage: String
         let weekdayTrendMessage: String
         let necessityLines: String
         let categoryLines: String
-        let paymentLines: String
         let weekdayLines: String
         let monthlyLines: String
         let trendByNecessityLines: String
@@ -213,14 +208,16 @@ class AdviceLLMService {
 
                 var accumulated = ""
 
-                let generateResult: GenerateResult = try MLXLMCommon.generate(
+                let stream = try MLXLMCommon.generate(
                     input: input,
+                    cache: nil,
                     parameters: params,
-                    context: context,
-                    didGenerate: { tokens in
-                        let piece = context.tokenizer.decode(tokenIds: tokens)
+                    context: context
+                )
+                for await generation in stream {
+                    switch generation {
+                    case .chunk(let piece):
                         accumulated += piece
-
                         let snapshot = accumulated
                         Task { @MainActor in
                             if snapshot.contains("</think>") {
@@ -246,16 +243,18 @@ class AdviceLLMService {
                                 self.streamingResponse = display
                             }
                         }
-                        return .more
+                    case .info(let info):
+                        #if DEBUG
+                        print("[AdviceLLM] ⚡ Stage 2 生成完了: \(String(format: "%.1f", info.tokensPerSecond)) tok/s")
+                        print("[AdviceLLM]   生テキスト(\(accumulated.count)文字): \"\(accumulated.prefix(120))...\"")
+                        #endif
+                    default:
+                        break
                     }
-                )
-                #if DEBUG
-                print("[AdviceLLM] ⚡ Stage 2 生成完了: \(String(format: "%.1f", generateResult.tokensPerSecond)) tok/s")
-                print("[AdviceLLM]   生テキスト(\(generateResult.output.count)文字): \"\(generateResult.output.prefix(120))...\"")
-                #endif
-                return generateResult.output
+                }
+                return accumulated
             }
-            MLX.GPU.clearCache()
+            MLX.Memory.clearCache()
 
             finalResponse = cleanResponse(result)
 
@@ -311,25 +310,17 @@ class AdviceLLMService {
 
     /// LLM 呼び出し前のキーワード先読み判定。確信度が高いケースのみ返し、それ以外は nil で LLM に委ねる。
     private static func keywordPrefilter(_ text: String) -> QueryIntent? {
-        let paymentKeywords   = ["現金", "クレジットカード", "QRコード決済", "電子マネー", "キャッシュレス", "支払い方法"]
-        let paymentExclusions = ["おすすめ", "変化", "推移", "増えた", "減った", "変わった"]
         let weekdayKeywords   = ["月曜", "火曜", "水曜", "木曜", "金曜", "土曜", "日曜", "曜日", "週末", "平日"]
         let necessityCompound = ["必要支出", "便利支出", "贅沢支出", "必要度"]
         let adviceTriggers    = ["節約", "削減", "見直し", "改善", "減らす", "コツ", "アドバイス"]
 
-        // 1. payment: 支払い方法固有語 ── 推薦・変化系は除外して LLM に委ねる
-        if paymentKeywords.contains(where: { text.contains($0) }) {
-            if !paymentExclusions.contains(where: { text.contains($0) }) {
-                return .payment
-            }
-        }
-        // 2. weekday: 曜日名・週末・平日
+        // 1. weekday: 曜日名・週末・平日
         if weekdayKeywords.contains(where: { text.contains($0) }) { return .weekday }
 
-        // 3. necessity: 複合語のみ（単体の「必要」は対象外）
+        // 2. necessity: 複合語のみ（単体の「必要」は対象外）
         if necessityCompound.contains(where: { text.contains($0) }) { return .necessity }
 
-        // 4. category: カテゴリ名あり かつ アドバイストリガーなし
+        // 3. category: カテゴリ名あり かつ アドバイストリガーなし
         let hasAdviceTrigger = adviceTriggers.contains(where: { text.contains($0) })
         if !hasAdviceTrigger {
             if allCategories.contains(where: { text.contains($0) }) { return .category }
@@ -351,14 +342,13 @@ class AdviceLLMService {
         /no_think
         以下の質問を分類し、JSONオブジェクトのみを出力してください。説明は不要です。
 
-        有効なインテント: advice, overview, category, trend, necessity, payment, weekday, help, offtopic
+        有効なインテント: advice, overview, category, trend, necessity, weekday, help, offtopic
 
         - advice   : 節約・出費削減アドバイスを求める（例: 節約のコツを教えて、一番無駄な出費はどこ?、どこを削減すべき?）
         - overview : 支出について大まかに知りたい、支出のスコアを知りたい、支出を評価してほしい（例: 全体的な傾向は?、家計は健全?）
         - category : 特定カテゴリ(\(Self.allCategories.joined(separator: "、")))の金額・詳細を知りたい（例: 今月の食費は?、食費はどのくらい?、交通費について教えて、コンビニにいくら使った?、スマホ代は?）
-        - trend    : 時系列・月別の推移を知りたい、時系列で比較したい（例: 先月の支出は?、月ごとの変化は?、支出傾向の推移を教えて、クレカと現金の支払いはどう変化した?）
+        - trend    : 時系列・月別の推移を知りたい、時系列で比較したい（例: 先月の支出は?、月ごとの変化は?、支出傾向の推移を教えて）
         - necessity: 必要度(必要・便利・贅沢)別支出を知りたい（例: 贅沢支出はどれくらい?、必要支出の割合は?、先月の便利支出の金額を教えて）
-        - payment  : 自分の支払い方法の実績・割合を知りたい（例: 現金とカードどちらが多い?、QRコード決済の割合は?）※カードや決済サービスの推薦・比較はofftopic
         - weekday  : 曜日の傾向を知りたい（例: 何曜日の支出が多い?）
         - help     : このAIの機能・使い方を知りたい（例: 何ができる?、どういうアプリ？）
         - offtopic : 家計・支出と無関係な質問、または金融商品の推薦・比較（例: 明日の天気は?、最近のニュースは？、おすすめのクレジットカードは?、ダイエット方法は?）
@@ -371,9 +361,7 @@ class AdviceLLMService {
         Q: スマホ代は？ → {"intent": "category"}
         Q: 先月と今月の支出を比べて → {"intent": "trend"}
         Q: 毎月どのくらい使っている？ → {"intent": "trend"}
-        Q: クレカと現金の支払いはどう変化した？ → {"intent": "trend"}
         Q: 贅沢支出はどれくらい？ → {"intent": "necessity"}
-        Q: 現金とカードどちらが多い？ → {"intent": "payment"}
         Q: 何曜日に一番使っている？ → {"intent": "weekday"}
         Q: このAIで何ができる？ → {"intent": "help"}
         Q: おすすめのレシピを教えて → {"intent": "offtopic"}
@@ -395,16 +383,21 @@ class AdviceLLMService {
             )
             var params = GenerateParameters()
             params.maxTokens = 50
-            let generateResult: GenerateResult = try MLXLMCommon.generate(
-                input: input, parameters: params, context: context,
-                didGenerate: { _ in .more }
+            var output = ""
+            let stream = try MLXLMCommon.generate(
+                input: input, cache: nil, parameters: params, context: context
             )
+            for await generation in stream {
+                if let chunk = generation.chunk {
+                    output += chunk
+                }
+            }
             #if DEBUG
-            print("[AdviceLLM]   Stage 1 生テキスト: \"\(generateResult.output)\"")
+            print("[AdviceLLM]   Stage 1 生テキスト: \"\(output)\"")
             #endif
-            return generateResult.output
+            return output
         }
-        MLX.GPU.clearCache()
+        MLX.Memory.clearCache()
 
         let cleaned = cleanResponse(raw)
         let intent = QueryIntent.parse(from: cleaned)
@@ -430,7 +423,7 @@ class AdviceLLMService {
         if intent == .offtopic {
             return """
             あなたはAI家計ナビの節約AIです。登録されたレシートをもとに家計・支出に関する質問に答えます。
-            節約アドバイス、支出全体のサマリー、カテゴリ別・月別・曜日別の支出集計、支払い方法の確認ができます。
+            節約アドバイス、支出全体のサマリー、カテゴリ別・月別・曜日別の支出集計ができます。
 
             # 命令文：
             ユーザーの質問を確認し、以下の方針で回答してください。
@@ -458,7 +451,6 @@ class AdviceLLMService {
             ・節約・出費削減のアドバイス（例:「節約のコツを教えて」「無駄遣いはどこ？」）
             ・全体的な支出傾向・推移の分析（例:「今月どれくらい使った？」）
             ・特定カテゴリの詳細（例:「食費はどのくらい？」）
-            ・支払い方法の分析（例:「現金とカードどちらが多い？」）
             ・家計スコア・評価（例:「家計は健全？」）
             ・曜日・時期の傾向（例:「何曜日に多く使っている？」）
 
@@ -506,7 +498,6 @@ class AdviceLLMService {
             switch section {
             case .summary:   parts.append(sectionSummary(ctx))
             case .saving:    parts.append(sectionSaving(ctx))
-            case .payment:   parts.append(sectionPayment(ctx))
             case .trend:     parts.append(sectionTrend(ctx))
             case .weekday:   parts.append(sectionWeekday(ctx))
             case .necessity: parts.append(sectionNecessity(ctx))
@@ -554,10 +545,6 @@ class AdviceLLMService {
 
         let totalAmount = target.reduce(0) { $0 + $1.total }
         let necessityGroups = Dictionary(grouping: target) { $0.necessity }
-        let paymentGroups = Dictionary(grouping: target) { $0.paymentMethod }
-
-        let cashTotal = paymentGroups["現金"]?.reduce(0) { $0 + $1.total } ?? 0
-        let cashPct = totalAmount > 0 ? Int(Double(cashTotal) / Double(totalAmount) * 100) : 0
 
         let targetRatio = UserDefaults.standard.object(forKey: "necessityTargetRatio") as? Double ?? 62.5
         let scalingFactor = 100.0 / targetRatio
@@ -645,10 +632,6 @@ class AdviceLLMService {
             }
         }
 
-        let paymentMethodMessage = cashPct >= 30
-            ? "現金支払いが\(cashTotal)円（総支出の\(cashPct)%）を占めています。そのため、ポイント還元のあるクレジットカードやQRコード決済への切り替えを検討すると、ポイント還元によりお得に買い物ができます。"
-            : "キャッシュレス決済を主体に、ポイント還元などを活用して上手に買い物ができています。"
-
         let necessityLines = ["必要", "便利", "贅沢"].map { nec -> String in
             let amount = necessityGroups[nec]?.reduce(0) { $0 + $1.total } ?? 0
             let pct = totalAmount > 0 ? Int(Double(amount) / Double(totalAmount) * 100) : 0
@@ -676,13 +659,6 @@ class AdviceLLMService {
             } else {
                 return "   - \(cat)：支出なし（0円, \(necDetails)）"
             }
-        }.joined(separator: "\n")
-
-        let allPayments = ["現金", "クレジットカード", "QRコード決済", "電子マネー", "その他"]
-        let paymentLines = allPayments.map { method -> String in
-            let amount = paymentGroups[method]?.reduce(0) { $0 + $1.total } ?? 0
-            let pct = totalAmount > 0 ? Int(Double(amount) / Double(totalAmount) * 100) : 0
-            return "   - \(method)：\(amount > 0 ? "\(amount)円" : "支出なし")（総支出の\(pct)%）"
         }.joined(separator: "\n")
 
         let weekdayGroups = Dictionary(grouping: target) { receipt -> Int in
@@ -806,12 +782,10 @@ class AdviceLLMService {
             spendingScore: spendingScore,
             scoreMessage: scoreMessage,
             savingPotentialMessage: savingPotentialMessage,
-            paymentMethodMessage: paymentMethodMessage,
             spendingTrendMessage: spendingTrendMessage,
             weekdayTrendMessage: weekdayTrendMessage,
             necessityLines: necessityLines,
             categoryLines: categoryLines,
-            paymentLines: paymentLines,
             weekdayLines: weekdayLines,
             monthlyLines: monthlyLines,
             trendByNecessityLines: trendByNecessityLines,
@@ -830,7 +804,6 @@ class AdviceLLMService {
         print("[AdviceLLM]   節約余地: \(hasConvSaving ? "あり" : "なし（特になし）")")
         print("[AdviceLLM]   支出推移: \(spendingTrendMessage.prefix(40))...")
         print("[AdviceLLM]   曜日傾向: \(weekdayTrendMessage)")
-        print("[AdviceLLM]   支払い: \(paymentMethodMessage.prefix(40))...")
         #endif
 
         return context
@@ -862,16 +835,6 @@ class AdviceLLMService {
         ## 節約余地アドバイス
         以下の文章をユーザーにそのまま伝えてください：
         \(ctx.savingPotentialMessage)
-        """
-    }
-
-    private func sectionPayment(_ ctx: AnalysisContext) -> String {
-        """
-        ## 支払い方法の分析
-        \(ctx.paymentMethodMessage)
-
-        【支払い方法別内訳】
-        \(ctx.paymentLines)
         """
     }
 

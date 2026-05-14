@@ -43,8 +43,6 @@ struct ReceiptEditView: View {
                                    options: ReceiptAnalysisView.necessityOptions)
                         menuPicker("カテゴリ", selection: $receipt.category,
                                    options: ReceiptAnalysisView.categoryOptions)
-                        menuPicker("支払い方法", selection: $receipt.paymentMethod,
-                                   options: ReceiptAnalysisView.paymentMethods)
                     }
 
                     LabeledContent("メモ") {

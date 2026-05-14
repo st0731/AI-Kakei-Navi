@@ -32,7 +32,6 @@ struct ReceiptAnalysisView: View {
     @State private var editNecessity = "必要"
     @State private var editCategory = "食費"
     @State private var editTotal: Int? = nil
-    @State private var editPayment = "現金"
     @State private var isWarikan = false
     @State private var warikanCount: Int = 2
     @State private var editWarikanAmount: Int? = nil
@@ -43,7 +42,6 @@ struct ReceiptAnalysisView: View {
     static let weekdays = ["月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日", "日曜日", "不明"]
     static let necessityOptions = ["必要", "便利", "贅沢"]
     static let categoryOptions = ["食費", "服・美容費", "日用品・雑貨費", "交通・移動費", "通信費", "水道光熱費", "住居費", "医療・健康費", "趣味・娯楽費", "交際費", "サブスク費", "勉強費", "その他"]
-    static let paymentMethods = ["現金", "クレジットカード", "QRコード決済", "電子マネー", "その他"]
 
     private var warikanAmount: Int? {
         guard let total = editTotal, isWarikan, warikanCount >= 2 else { return nil }
@@ -160,7 +158,6 @@ struct ReceiptAnalysisView: View {
                                 }
                             }
 
-                            customMenuPicker(label: "支払い方法", selection: $editPayment, options: Self.paymentMethods)
                         }
                     } header: {
                         HStack {
@@ -332,8 +329,7 @@ struct ReceiptAnalysisView: View {
             weekday: isIncome ? "" : editWeekday,
             necessity: isIncome ? "" : editNecessity,
             category: isIncome ? "" : editCategory,
-            total: isWarikan ? (editWarikanAmount ?? editTotal ?? 0) : (editTotal ?? 0),
-            paymentMethod: isIncome ? "未設定" : editPayment
+            total: isWarikan ? (editWarikanAmount ?? editTotal ?? 0) : (editTotal ?? 0)
         )
         modelContext.insert(newRecord)
 
@@ -396,7 +392,6 @@ struct ReceiptAnalysisView: View {
                     editWeekday = weekdayString(from: parsedDate)
                     if Self.necessityOptions.contains(res.necessity) { editNecessity = res.necessity }
                     if Self.categoryOptions.contains(res.category) { editCategory = res.category }
-                    if Self.paymentMethods.contains(res.paymentMethod) { editPayment = res.paymentMethod }
                     editTotal = res.total
                     selectedItems = []
                 }

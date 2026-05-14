@@ -47,15 +47,11 @@ class LLMService {
             # 2. カテゴリ (category) のリスト：
             食費、服・美容費、日用品・雑貨費、交通・移動費、通信費、水道光熱費、住居費、医療・健康費、趣味・娯楽費、交際費、サブスク費、勉強費、その他
 
-            # 3. 支払い方法リスト：
-            現金, クレジットカード, QRコード決済, 電子マネー, その他
-
             # ヒント：
             ・OCRデータには営業時間や宣伝などの出力するべきでない情報が含まれている場合があるのでそれらは無視してください。
             ・¥や円が書いていない数値は商品コードなどの可能性が高いので無視してください。
             ・合計金額は合計の後に書かれていることが多いです。
             ・判定したカテゴリが、購入された商品リストの内容（例：バーガー、コーヒー等）と矛盾していないか確認してください。商品内容を最終的な根拠にしてください。
-            ・PayPay->payment_method=QRコード決済
             ・店名や購入商品からカテゴリや必要度を推測してください。
 
             # 出力フォーマット(JSON以外出力禁止)：
@@ -66,7 +62,6 @@ class LLMService {
               "necessity": "必要 or 便利 or 贅沢",
               "category": "カテゴリ名",
               "total": 合計金額(整数),
-              "payment_method": "支払い方法",
               "reason": "カテゴリと必要度の選択理由を簡潔に"
             }
 
@@ -82,18 +77,21 @@ class LLMService {
                 var params = GenerateParameters()
                 params.maxTokens = 800
 
-                let generateResult: GenerateResult = try MLXLMCommon.generate(
+                var output = ""
+                let stream = try MLXLMCommon.generate(
                     input: input,
+                    cache: nil,
                     parameters: params,
-                    context: context,
-                    didGenerate: { tokens in
-                        return .more
-                    }
+                    context: context
                 )
-
-                return generateResult.output
+                for await generation in stream {
+                    if let chunk = generation.chunk {
+                        output += chunk
+                    }
+                }
+                return output
             }
-            MLX.GPU.clearCache()
+            MLX.Memory.clearCache()
 
             #if DEBUG
             print("\n================ LLM RECEIPT ANALYSIS OUTPUT (RAW) ================")

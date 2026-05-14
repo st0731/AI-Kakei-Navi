@@ -47,13 +47,11 @@ struct InsightAnalyticsView: View {
     enum BreakdownMetric: String, CaseIterable {
         case category  = "カテゴリ別"
         case necessity = "必要度別"
-        case payment   = "支払い方法別"
         case weekday   = "曜日別"
         var analysisMetric: AnalysisMetric {
             switch self {
             case .category:  return .category
             case .necessity: return .necessity
-            case .payment:   return .payment
             case .weekday:   return .weekday
             }
         }
@@ -79,17 +77,15 @@ struct InsightAnalyticsView: View {
     enum AnalysisMetric: String, CaseIterable {
         case category  = "カテゴリ"
         case necessity = "必要度"
-        case payment   = "支払い方法"
         case monthly   = "月別"
         case daily     = "日別"
         case weekday   = "曜日別"
 
-        var isPieChart: Bool { self == .category || self == .necessity || self == .payment }
+        var isPieChart: Bool { self == .category || self == .necessity }
         var icon: String {
             switch self {
             case .category:  return "chart.pie.fill"
             case .necessity: return "gauge.with.needle.fill"
-            case .payment:   return "creditcard.fill"
             case .monthly:   return "calendar"
             case .daily:     return "calendar.day.timeline.left"
             case .weekday:   return "calendar.badge.exclamationmark"
@@ -195,7 +191,7 @@ struct InsightAnalyticsView: View {
                             }
 
                             // 絞り込みフィルター
-                            if !showIncome && currentMetric != .payment {
+                            if !showIncome {
                                 HStack(spacing: 8) {
                                     if currentMetric != .category {
                                         filterMenu(title: "カテゴリ", selected: $selectedCategoryFilter,

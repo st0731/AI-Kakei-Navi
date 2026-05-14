@@ -10,7 +10,6 @@ class SavedReceipt {
     var necessity: String
     var category: String
     var total: Int
-    var paymentMethod: String
     var createdAt: Date
 
     init(
@@ -20,8 +19,7 @@ class SavedReceipt {
         weekday: String = "",
         necessity: String = "",
         category: String = "",
-        total: Int = 0,
-        paymentMethod: String = "未設定"
+        total: Int = 0
     ) {
         self.isIncome = isIncome
         self.memo = memo
@@ -30,7 +28,6 @@ class SavedReceipt {
         self.necessity = necessity
         self.category = category
         self.total = total
-        self.paymentMethod = paymentMethod
         self.createdAt = Date()
     }
 }

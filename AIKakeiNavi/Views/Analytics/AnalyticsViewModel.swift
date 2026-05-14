@@ -140,14 +140,6 @@ class AnalyticsViewModel: ObservableObject {
                 return total > 0 ? SummaryItem(label: nec, total: total) : nil
             }
 
-        case .payment:
-            return Dictionary(grouping: filtered) { $0.paymentMethod }
-                .compactMap { key, items -> SummaryItem? in
-                    let total = items.reduce(0) { $0 + $1.total }
-                    return total > 0 ? SummaryItem(label: key, total: total) : nil
-                }
-                .sorted { $0.total > $1.total }
-
         case .monthly:
             let fmt = DateFormatter(); fmt.dateFormat = "yyyy/MM"
             if showIncome {
