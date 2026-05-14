@@ -1,14 +1,8 @@
 import Foundation
+import MLX
 import MLXLLM
 import MLXLMCommon
 import SwiftData
-
-struct ChatMessage: Identifiable {
-    let id = UUID()
-    let role: String
-    let content: String
-    var isBlocked: Bool = false
-}
 
 private struct ContentFilter {
     static let blockedKeywords: [String] = [
@@ -42,7 +36,7 @@ enum QueryIntent: String {
     // 意図 → 必要データセクションのマッピング（Swiftが決定論的に担う）
     var sections: [QuerySection] {
         switch self {
-        case .advice:    return [.summary, .saving]
+        case .advice:    return [.saving]
         case .overview:  return [.summary]
         case .category:  return [.category]
         case .trend:     return [.trend]
@@ -100,7 +94,9 @@ enum AdviceAnalysisPeriod: String, CaseIterable {
 class AdviceLLMService {
     static let allCategories = ["食費", "服・美容費", "日用品・雑貨費", "交通・移動費", "通信費", "水道光熱費", "住居費", "医療・健康費", "趣味・娯楽費", "交際費", "サブスク費", "勉強費", "その他"]
 
-    var messages: [ChatMessage] = []
+    var currentQuestion: String = ""
+    var currentAnswer: String = ""
+    var isAnswerBlocked: Bool = false
     var isRunning = false
     var downloadProgress: Double = 0.0
     var statusText = ""
@@ -138,7 +134,9 @@ class AdviceLLMService {
     func sendMessage(userText: String, receipts: [SavedReceipt]) async {
         guard !userText.trimmingCharacters(in: .whitespaces).isEmpty else { return }
 
-        messages.append(ChatMessage(role: "user", content: userText))
+        currentQuestion = userText
+        currentAnswer = ""
+        isAnswerBlocked = false
         isRunning = true
         downloadProgress = 0.0
         statusText = "準備中..."
@@ -257,6 +255,7 @@ class AdviceLLMService {
                 #endif
                 return generateResult.output
             }
+            MLX.GPU.clearCache()
 
             finalResponse = cleanResponse(result)
 
@@ -294,13 +293,16 @@ class AdviceLLMService {
         #endif
 
         streamingResponse = ""
-        messages.append(ChatMessage(role: "assistant", content: finalResponse, isBlocked: isMessageBlocked))
+        currentAnswer = finalResponse
+        isAnswerBlocked = isMessageBlocked
         statusText = ""
         isRunning = false
     }
 
-    func clearMessages() {
-        messages = []
+    func clearAnswer() {
+        currentQuestion = ""
+        currentAnswer = ""
+        isAnswerBlocked = false
         streamingResponse = ""
         dataWarningMessage = ""
     }
@@ -402,6 +404,7 @@ class AdviceLLMService {
             #endif
             return generateResult.output
         }
+        MLX.GPU.clearCache()
 
         let cleaned = cleanResponse(raw)
         let intent = QueryIntent.parse(from: cleaned)
@@ -436,7 +439,8 @@ class AdviceLLMService {
 
             # 回答の基本原則（最優先）：
             1. **簡潔な回答**: 回答は150字以内で。
-            2. **丁寧な言葉使い**: 回答では敬語を使用して下さい。
+            2. **箇条書き形式**: 必ず「・」を使った箇条書きで整理して回答してください。
+            3. **丁寧な言葉使い**: 回答では敬語を使用して下さい。
             """
         }
 
@@ -462,7 +466,8 @@ class AdviceLLMService {
 
             # 回答の基本原則（最優先）：
             1. **簡潔な回答**: 回答は300字以内で簡潔に。
-            2. **丁寧な言葉使い**: 回答では敬語を使用して下さい。
+            2. **箇条書き形式**: 必ず「・」を使った箇条書きで整理して回答してください。
+            3. **丁寧な言葉使い**: 回答では敬語を使用して下さい。
             """
         }
 
@@ -479,7 +484,8 @@ class AdviceLLMService {
 
             # 回答の基本原則（最優先）：
             1. **簡潔な回答**: 回答は200字以内で簡潔に。
-            2. **丁寧な言葉使い**: 回答では敬語を使用して下さい。
+            2. **箇条書き形式**: 必ず「・」を使った箇条書きで整理して回答してください。
+            3. **丁寧な言葉使い**: 回答では敬語を使用して下さい。
             """
         }
 
@@ -490,7 +496,7 @@ class AdviceLLMService {
         var parts: [String] = [
             """
             # 命令文：
-            以下のユーザーの支出レポートから情報を抜き出すことで、ユーザーの質問に回答してください。
+            あなたは支出報告や節約アドバイスを行う専門家です。以下のユーザーの支出レポートから情報を抜き出すことで、ユーザーの質問に回答してください。
 
             # 支出レポート（\(ctx.periodLabel)・合計\(ctx.totalAmount)円・\(ctx.recordCount)件）：
             """
@@ -512,8 +518,9 @@ class AdviceLLMService {
         # 回答の基本原則（最優先）：
         1. **数値の透明性**: 質問に直接関係する数値のみを引用し、金額やパーセントを出す際は必ず「〇〇円（総支出の〇〇%）」のように記述して下さい。
         2. **簡潔な回答**: 回答は300字以内で簡潔に。
-        3. **丁寧な言葉使い**: 回答では敬語を使用して下さい。
-        4. **誠実な回答**: ユーザの質問内容に関連のある回答のみをして下さい。
+        3. **箇条書き形式**: 必ず「・」を使った箇条書きで整理して回答してください。
+        4. **丁寧な言葉使い**: 回答では敬語を使用して下さい。
+        5. **誠実な回答**: ユーザの質問内容に関連のある回答のみをして下さい。
         """)
 
         let prompt = parts.joined(separator: "\n\n")
@@ -586,11 +593,11 @@ class AdviceLLMService {
             let sortedCats = catTotals.sorted { $0.value > $1.value }.prefix(2)
             let catsWithPct = sortedCats.map { entry -> String in
                 let pct = convenienceTotal > 0 ? Int(Double(entry.value) / Double(convenienceTotal) * 100) : 0
-                return "\(entry.key)(\(pct)%)"
+                return "\(entry.key)(\(entry.value)円、\(pct)%)"
             }
             let catsStr = catsWithPct.joined(separator: "、")
             let tipsStr = sortedCats.compactMap { getConvenienceTip(for: $0.key) }.joined(separator: "")
-            savingPotentials.append("便利支出であり、\(convenienceTotal)円（総支出の\(Int(convRatio))%）を占めています。便利支出は主に\(catsStr)で構成されており、ここに大きな節約余地があります。\(tipsStr)")
+            savingPotentials.append("一番無駄な支出は便利支出であり、\(convenienceTotal)円（総支出の\(Int(convRatio))%）を占めています。便利支出は主に\(catsStr)で構成されており、ここに大きな節約余地があります。\(tipsStr)")
         }
 
         if luxRatio > 30, let luxItems = necessityGroups["贅沢"] {
@@ -599,11 +606,11 @@ class AdviceLLMService {
             let sortedCats = catTotals.sorted { $0.value > $1.value }.prefix(2)
             let catsWithPct = sortedCats.map { entry -> String in
                 let pct = luxuryTotal > 0 ? Int(Double(entry.value) / Double(luxuryTotal) * 100) : 0
-                return "\(entry.key)(\(pct)%)"
+                return "\(entry.key)(\(entry.value)円、\(pct)%)"
             }
             let catsStr = catsWithPct.joined(separator: "、")
             let tipsStr = sortedCats.compactMap { getLuxuryTip(for: $0.key) }.joined(separator: "")
-            savingPotentials.append("贅沢支出であり、\(luxuryTotal)円（総支出の\(Int(luxRatio))%）を占めています。贅沢支出は主に\(catsStr)で構成されており、ここに大きな節約余地があります。\(tipsStr)")
+            savingPotentials.append("一番無駄な支出は贅沢支出であり、\(luxuryTotal)円（総支出の\(Int(luxRatio))%）を占めています。贅沢支出は主に\(catsStr)で構成されており、ここに大きな節約余地があります。\(tipsStr)")
         }
 
         let savingPotentialMessage = savingPotentials.isEmpty
@@ -853,7 +860,7 @@ class AdviceLLMService {
     private func sectionSaving(_ ctx: AnalysisContext) -> String {
         """
         ## 節約余地アドバイス
-        以下の節約アドバイスをユーザーにそのままお伝えください：
+        以下の文章をユーザーにそのまま伝えてください：
         \(ctx.savingPotentialMessage)
         """
     }
@@ -961,10 +968,10 @@ class AdviceLLMService {
             "交通・移動費": "具体的には、交通・移動費ではタクシーなどの贅沢な移動手段を特別な場合に限定し、日常は公共機関を優先してください。",
             "通信費": "具体的には、通信費では過剰なデータプランや最新機種への頻繁な買い替えを控え、実際の使用量に合ったプランへの見直しを検討してください。",
             "水道光熱費": "具体的には、水道光熱費では、快適さのための過剰な冷暖房の使用を控え、適正温度での運用を心がけてください。",
-            "住居費": "具体的には、住居費ではステータスのための高額な家賃や設備投資を見直し、身の丈に合った住環境への最適化を検討してください。",
+            "住居費": "具体的には、住居費ではステータスのための高額な家賃や設備投資を見直してください。",
             "医療・健康費": "具体的には、医療・健康費では高額なサプリメントや過剰な美容診療を見直し、基本的な生活習慣による予防に注力してください。",
             "趣味・娯楽費": "具体的には、趣味・娯楽費では一度のレジャーにかけすぎず、年間予算を決めて計画的に楽しむことが推奨されます。",
-            "交際費": "具体的には、交際費では見栄を張るための奢りや高級店での集まりを控え、身の丈に合った交際を心がけてください。",
+            "交際費": "具体的には、交際費では見栄を張るための奢りや高級店での集まりを控えてください。",
             "サブスク費": "具体的には、サブスク費ではプレミアムプランなど上位プランへの過剰な課金を見直し、通常プランで十分でないか確認してください。",
             "勉強費": "具体的には、勉強費では高額なセミナーやスクールに頼りすぎず、独学や安価な教材を活用した自立的な学習を検討してください。",
             "その他": "具体的には、自分への過度なご褒美を控え、支出が本当に人生の質を高めているか再確認する習慣を持ってください。"

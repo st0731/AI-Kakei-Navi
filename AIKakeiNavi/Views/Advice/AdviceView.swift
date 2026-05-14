@@ -21,7 +21,7 @@ struct AdviceView: View {
         NavigationStack {
             Group {
                 if aiManager.hasDownloadedModel {
-                    chatInterface
+                    qaInterface
                 } else {
                     lockedStateView
                 }
@@ -29,9 +29,9 @@ struct AdviceView: View {
             .navigationTitle("節約AI")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    if aiManager.hasDownloadedModel && !adviceService.messages.isEmpty {
+                    if aiManager.hasDownloadedModel && !adviceService.currentQuestion.isEmpty {
                         Button {
-                            adviceService.clearMessages()
+                            adviceService.clearAnswer()
                         } label: {
                             Image(systemName: "arrow.counterclockwise")
                         }
@@ -45,61 +45,118 @@ struct AdviceView: View {
         }
     }
 
-    private var chatInterface: some View {
+    private var qaInterface: some View {
         VStack(spacing: 0) {
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(spacing: 12) {
-                        // データ数に関する注意書きを見出し/リストの先頭に移動
-                        if !adviceService.dataWarningMessage.isEmpty {
-                            HStack(spacing: 6) {
-                                Image(systemName: "exclamationmark.triangle.fill")
-                                    .foregroundColor(.orange)
-                                Text(adviceService.dataWarningMessage)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color.orange.opacity(0.1))
-                            .cornerRadius(8)
+            ScrollView {
+                VStack(spacing: 12) {
+                    if !adviceService.dataWarningMessage.isEmpty {
+                        HStack(spacing: 6) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(.orange)
+                            Text(adviceService.dataWarningMessage)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
                         }
-
-                        if adviceService.messages.isEmpty && !adviceService.isRunning {
-                            emptyStateView
-                                .frame(maxWidth: .infinity)
-                                .padding(.top, 8)
-                        } else {
-                            ForEach(adviceService.messages) { msg in
-                                MessageBubble(message: msg)
-                                    .id(msg.id)
-                            }
-                        }
-
-                        // 生成中のローディング表示（テキストは出さない）
-                        if adviceService.isRunning {
-                            loadingBubble
-                                .id("loading")
-                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.orange.opacity(0.1))
+                        .cornerRadius(8)
+                        .padding(.horizontal)
                     }
-                    .padding(.horizontal)
-                    .padding(.vertical, 12)
+
+                    if adviceService.currentQuestion.isEmpty && !adviceService.isRunning {
+                        emptyStateView
+                            .padding(.top, 16)
+                    } else {
+                        questionAndAnswerView
+                            .padding(.horizontal)
+                    }
                 }
-                .scrollDismissesKeyboard(.never)
-                .onTapGesture {
-                    isInputFocused = false
-                }
-                .onChange(of: adviceService.messages.count) { _, _ in
-                    scrollToBottom(proxy: proxy)
-                }
-                .onChange(of: adviceService.isRunning) { _, _ in
-                    scrollToBottom(proxy: proxy)
-                }
+                .padding(.vertical, 12)
+            }
+            .scrollDismissesKeyboard(.never)
+            .onTapGesture {
+                isInputFocused = false
             }
 
             Divider()
             inputBar
+        }
+    }
+
+    private var questionAndAnswerView: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // 質問カード
+            HStack {
+                Spacer(minLength: 40)
+                Text(adviceService.currentQuestion)
+                    .font(.body)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(Color.blue)
+                    .cornerRadius(18)
+                    .cornerRadius(4, corners: [.bottomRight])
+            }
+
+            // 回答カード
+            HStack(alignment: .bottom, spacing: 8) {
+                Image(systemName: adviceService.isAnswerBlocked ? "exclamationmark.shield.fill" : "bubble.left.and.bubble.right.fill")
+                    .font(.caption)
+                    .foregroundColor(.white)
+                    .padding(6)
+                    .background(adviceService.isAnswerBlocked ? Color.orange : Color.blue)
+                    .clipShape(Circle())
+
+                Group {
+                    if adviceService.isRunning {
+                        VStack(alignment: .leading, spacing: 4) {
+                            if !adviceService.statusText.isEmpty {
+                                Text(adviceService.statusText)
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                            TypingIndicator()
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 10)
+                                .background(Color(UIColor.secondarySystemGroupedBackground))
+                                .cornerRadius(18)
+                                .cornerRadius(4, corners: [.bottomLeft])
+                        }
+                    } else if !adviceService.currentAnswer.isEmpty {
+                        Text(adviceService.currentAnswer)
+                            .font(.body)
+                            .foregroundColor(.primary)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .background(
+                                adviceService.isAnswerBlocked
+                                    ? Color.orange.opacity(0.10)
+                                    : Color(UIColor.secondarySystemGroupedBackground)
+                            )
+                            .cornerRadius(18)
+                            .cornerRadius(4, corners: [.bottomLeft])
+                            .overlay(
+                                Group {
+                                    if adviceService.isAnswerBlocked {
+                                        RoundedRectangle(cornerRadius: 18)
+                                            .stroke(Color.orange.opacity(0.5), lineWidth: 1)
+                                    }
+                                }
+                            )
+                            .contextMenu {
+                                Button {
+                                    UIPasteboard.general.string = adviceService.currentAnswer
+                                } label: {
+                                    Label("コピー", systemImage: "doc.on.doc")
+                                }
+                            }
+                    }
+                }
+
+                Spacer(minLength: 40)
+            }
         }
     }
 
@@ -108,15 +165,15 @@ struct AdviceView: View {
             Image(systemName: "lock.shield.fill")
                 .font(.system(size: 60))
                 .foregroundColor(.blue.opacity(0.6))
-            
+
             Text("AI機能がロックされています")
                 .font(.headline)
-            
+
             Text("節約AI機能を利用するには\nモデルのダウンロードが必要です")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
-            
+
             Button(action: { showDownloadSheet = true }) {
                 Text("モデルをダウンロードする")
                     .fontWeight(.bold)
@@ -131,11 +188,8 @@ struct AdviceView: View {
         .padding()
     }
 
-    // MARK: - Subviews
-
     private var emptyStateView: some View {
         VStack(spacing: 20) {
-
             Image(systemName: "bubble.left.and.bubble.right.fill")
                 .font(.system(size: 48))
                 .foregroundColor(.blue.opacity(0.7))
@@ -170,42 +224,6 @@ struct AdviceView: View {
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 24)
-        }
-    }
-
-    // 生成中のみ表示されるバブル（回答が完了するまでこの状態）
-    private var loadingBubble: some View {
-        HStack(alignment: .bottom, spacing: 8) {
-            Image(systemName: "bubble.left.and.bubble.right.fill")
-                .font(.caption)
-                .foregroundColor(.white)
-                .padding(6)
-                .background(Color.blue)
-                .clipShape(Circle())
-
-            VStack(alignment: .leading, spacing: 4) {
-                if !adviceService.statusText.isEmpty {
-                    Text(adviceService.statusText)
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                }
-
-                Group {
-                    if adviceService.downloadProgress > 0 && adviceService.downloadProgress < 1 {
-                        ProgressView(value: adviceService.downloadProgress)
-                            .progressViewStyle(.linear)
-                            .frame(width: 120)
-                    } else {
-                        TypingIndicator()
-                    }
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(Color(UIColor.secondarySystemGroupedBackground))
-                .cornerRadius(18)
-                .cornerRadius(4, corners: [.bottomLeft])
-            }
-            Spacer()
         }
     }
 
@@ -255,8 +273,6 @@ struct AdviceView: View {
         .background(Color(UIColor.systemGroupedBackground))
     }
 
-    // MARK: - Helpers
-
     private var canSend: Bool {
         !inputText.trimmingCharacters(in: .whitespaces).isEmpty && !adviceService.isRunning
     }
@@ -265,71 +281,6 @@ struct AdviceView: View {
         guard !text.trimmingCharacters(in: .whitespaces).isEmpty else { return }
         Task {
             await adviceService.sendMessage(userText: text, receipts: allReceipts)
-        }
-    }
-
-    private func scrollToBottom(proxy: ScrollViewProxy) {
-        withAnimation(.easeOut(duration: 0.2)) {
-            if adviceService.isRunning {
-                proxy.scrollTo("loading", anchor: .bottom)
-            } else if let last = adviceService.messages.last {
-                proxy.scrollTo(last.id, anchor: .bottom)
-            }
-        }
-    }
-}
-
-// MARK: - MessageBubble
-
-struct MessageBubble: View {
-    let message: ChatMessage
-    private var isUser: Bool { message.role == "user" }
-
-    private var bubbleBackground: Color {
-        if isUser { return .blue }
-        if message.isBlocked { return Color.orange.opacity(0.10) }
-        return Color(UIColor.secondarySystemGroupedBackground)
-    }
-
-    var body: some View {
-        HStack(alignment: .bottom, spacing: 8) {
-            if isUser { Spacer(minLength: 40) }
-
-            if !isUser {
-                Image(systemName: message.isBlocked ? "exclamationmark.shield.fill" : "bubble.left.and.bubble.right.fill")
-                    .font(.caption)
-                    .foregroundColor(.white)
-                    .padding(6)
-                    .background(message.isBlocked ? Color.orange : Color.blue)
-                    .clipShape(Circle())
-            }
-
-            Text(message.content)
-                .font(.body)
-                .foregroundColor(isUser ? .white : .primary)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(bubbleBackground)
-                .cornerRadius(18)
-                .cornerRadius(isUser ? 4 : 18, corners: isUser ? [.bottomRight] : [])
-                .cornerRadius(isUser ? 18 : 4, corners: isUser ? [] : [.bottomLeft])
-                .overlay(
-                    Group {
-                        if message.isBlocked {
-                            RoundedRectangle(cornerRadius: 18)
-                                .stroke(Color.orange.opacity(0.5), lineWidth: 1)
-                        }
-                    }
-                )
-                .contextMenu {
-                    Button {
-                        UIPasteboard.general.string = message.content
-                    } label: {
-                        Label("コピー", systemImage: "doc.on.doc")
-                    }
-                }
-
-            if !isUser { Spacer(minLength: 40) }
         }
     }
 }
